@@ -18,6 +18,7 @@ It's possible to [code your own filter plugin](https://www.elastic.co/guide/en/l
 but what to do if you already have the filter implemented in some other programming language and want to reuse it in Logstash?
 
 In this case it's easier to communicate with this external filter from Logstash. This article demonstrates the simplest way of incorporating external
+
 applications into the Logstash pipeline:
 
 1. Logstash launches external program and delivers the input data to it through command line arguments and stdin
@@ -30,7 +31,7 @@ to launch this application once (as a daemon/service) and communicate with it us
 
 Detailed explanation and usage example are stated below.
 
-<!--break-->
+
 
 ## Launching external program
 
@@ -96,4 +97,3 @@ If you only need to launch external utility upon any matched Logstash event, you
 – [exec output plugin](https://www.elastic.co/guide/en/logstash/current/plugins-outputs-exec.html).
 
 {% include twitter_plug.html %}
-
