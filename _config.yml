@@ -1,7 +1,7 @@
 # Permalinks
-#
+#(permalink causes pagination to not work)
 # Use of `relative_permalinks` ensures post links from the index work properly.
-permalink: "/:title/"
+#permalink: "/:title/"
 
 highlighter: rouge
 
@@ -37,7 +37,7 @@ exclude: ["transfer.sh", README.md]
 title:               Del Bao
 tagline:             Sapere aude!
 url:                 ""
-paginate_l:           4
+paginate: 4
 baseurl:             ""
 
 paginate_langs:      ["en"]
@@ -52,8 +52,8 @@ sass:
 # About/contact
 author:
   name:              Del Bao
-  url:               https://twitter.com/vitalyrepin
-  email:             vitaly_repin@fsfe.org
+  url:               https://twitter.com/delbao1
+  email:             #vitaly_repin@fsfe.org
 
 # Custom vars
 version:             1.0.0
@@ -66,7 +66,7 @@ gems:
   - jekyll-paginate
 
 # Conversion
-# markdown:    redcarpet
+markdown:    kramdown
 excerpt_separator: "<!--break-->"
 
 redcarpet:
@@ -77,7 +77,6 @@ kramdown:
 
 pages_list:
   About: '/about/'
-  Hobby projects: '/hobbies/'
   Tags: '/tags/'
   Feed: '/atom.xml'
 
