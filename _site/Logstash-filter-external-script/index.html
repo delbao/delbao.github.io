@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+  <head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  
+
+<meta name="description" content="This article describes the approach to call external applications from Logstash Pipeline and use their (JSON/XML/key-value) output in the further filtering process.">
+
+
+<meta name="keywords" content="logstash, elasticsearch, ruby"/>
+
+
+<!-- Facebook tags -->
+<meta property="og:title" content="How to incorporate external utility scripts into Logstash Pipeline">
+<meta property="og:type" content="article">
+<meta property="og:url" content="http://localhost:4000/Logstash-filter-external-script//">
+<meta property="og:image" content="http://localhost:4000/public/images/hackergotchi_big.png">
+<meta property="og:description" content="This article describes the approach to call external applications from Logstash Pipeline and use their (JSON/XML/key-value) output in the further filtering process.">
+<meta property="og:site_name" content="Del Bao">
+<meta property="og:locale" content="en_US">
+
+
+  <meta property="article:published_time" content="2016-02-06T00:00:00+02:00">
+  <meta property="article:author" content="606660677">
+  
+
+
+<meta property="fb:admins" content="606660677">
+<!-- <meta property="fb:app_id" content=""> -->
+
+
+  <!-- Enable responsiveness on mobile devices-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+
+  <title>
+    
+      How to incorporate external utility scripts into Logstash Pipeline &middot; Del Bao
+    
+  </title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/public/css/poole.css">
+  <link rel="stylesheet" href="/public/css/syntax.css">
+  <link rel="stylesheet" href="/public/css/lanyon.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=PT+Serif:400,400italic,700%7CPT+Sans:400">
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/public/apple-touch-icon-precomposed.png">
+  <link rel="shortcut icon" href="/public/favicon.ico">
+
+  <!-- RSS -->
+  <link rel="alternate" type="application/rss+xml" title="RSS" href="/atom.xml">
+</head>
+
+
+  <body>
+
+    <!-- Target for toggling the sidebar `.sidebar-checkbox` is for regular
+     styles, `#sidebar-checkbox` for behavior. -->
+<input type="checkbox" class="sidebar-checkbox" id="sidebar-checkbox">
+
+<!-- Toggleable sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-item">
+    <p></p>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a class="sidebar-nav-item" href="/about">About</a>
+    <a class="sidebar-nav-item" href="/hobbies">Hobby projects</a>
+    <a class="sidebar-nav-item" href="/tags">Tags</a>
+    <a class="sidebar-nav-item" href="/atom.xml">Feed</a>
+    <a class="sidebar-nav-item" href="/">Latest posts</a>
+
+  <ul class="posts">  
+	  
+	   <li>  
+		   <span>06 Feb 2016</span> &raquo;  
+		   <a href="/Logstash-filter-external-script/">  
+		   How to incorporate external utility scripts into Logstash Pipeline</a>  
+	   </li>  
+	  
+   </ul>
+
+    
+
+ 
+    
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+  </nav>
+
+  <div class="sidebar-item">
+    <p>
+<a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png" /></a><span xmlns:dct="http://purl.org/dc/terms/" property="dct:title">The content of this site </span> by <a xmlns:cc="http://creativecommons.org/ns#" href="http://vrepin.org/blog" property="cc:attributionName" rel="cc:attributionURL">Vitaly Repin</a> is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>,
+	  <time datetime="2017-02-12T10:29:07+02:00">2017</time>.
+    </p>
+  </div>
+</div>
+
+
+    <!-- Wrap is the content to shift when toggling the sidebar. We wrap the
+         content to avoid any CSS collisions with our real content. -->
+    <div class="wrap">
+      <div class="masthead">
+
+        <div class="container">
+ <h3 class="masthead-title">
+          <h3 class="masthead-title">
+            <a href="/" title="Home">Del Bao</a>
+            <small>
+	
+  &nbsp;&nbsp;&nbsp;
+  <small><a href="/about/">About</a></small>
+
+  &nbsp;&nbsp;&nbsp;
+  <small><a href="/hobbies/">Hobby projects</a></small>
+
+  &nbsp;&nbsp;&nbsp;
+  <small><a href="/tags/">Tags</a></small>
+
+  &nbsp;&nbsp;&nbsp;
+  <small><a href="/atom.xml">Feed</a></small>
+
+	   </small>
+	</h3>
+        <h3 class="masthead-title">
+           <small>
+	     <a href="http://localhost:4000/en">English</a>
+	     <a href="http://localhost:4000/sv">Svenska</a>
+	     <a href="http://localhost:4000/ru">Русский</a>
+	   </small>
+        </div>
+      </div>
+
+      <div class="container content">
+        <div class="post">
+  <h1 class="post-title">How to incorporate external utility scripts into Logstash Pipeline</h1>
+  <span class="post-date">06 Feb 2016</span>
+  <h3 id="overview">Overview</h3>
+
+<p><a href="https://www.elastic.co/products/logstash">Logstash</a> is a great tool to process the logs and extract valuable data from them. There are many useful Logstash
+<a href="https://www.elastic.co/guide/en/logstash/current/filter-plugins.html">filter plugins</a> which make it easy to process the raw log data. However, sometimes
+external utilities are required to process the data in a more complicated way than existing filter plugins can.</p>
+
+<p>It’s possible to <a href="https://www.elastic.co/guide/en/logstash/current/_how_to_write_a_logstash_filter_plugin.html">code your own filter plugin</a> in Ruby
+but what to do if you already have the filter implemented in some other programming language and want to reuse it in Logstash?</p>
+
+<p>In this case it’s easier to communicate with this external filter from Logstash. This article demonstrates the simplest way of incorporating external
+applications into the Logstash pipeline:</p>
+
+<ol>
+  <li>Logstash launches external program and delivers the input data to it through command line arguments and stdin</li>
+  <li>External program writes results to stdout in any format understood by Logstash filters (e.g., JSON)</li>
+  <li>Logstash parses output of the external program and continues to handle it in the pipeline</li>
+</ol>
+
+<p>It’s needless to say that it is not the very best approach in terms of performance.
+E.g., if startup time of the external application is significant, you may consider
+to launch this application once (as a daemon/service) and communicate with it using <a href="http://en.wikipedia.org/wiki/%C3%98MQ">ØMQ</a> or other high-performance message queue.</p>
+
+<p>Detailed explanation and usage example are stated below.</p>
+
+<a class="anchor" id="read-more"></a>
+
+<h2 id="launching-external-program">Launching external program</h2>
+
+<p>We will use <a href="https://www.elastic.co/guide/en/logstash/current/plugins-filters-ruby.html">ruby filter</a> in order to launch external application and capture its output:</p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="n">filter</span> <span class="p">{</span>
+    <span class="c1"># &lt;...&gt; &lt;- More filters are above</span>
+    <span class="c1"># Launching external script to make a deeper text analysis</span>
+    <span class="k">if</span> <span class="p">[</span><span class="n">file_path</span><span class="p">]</span> <span class="o">=~</span> <span class="sr">/.+/</span> <span class="p">{</span>
+       <span class="n">ruby</span> <span class="p">{</span>
+          <span class="n">code</span> <span class="o">=&gt;</span> <span class="s1">'require "open3"
+                   body_path = event["file_path"]
+                   cmd =  "/opt/bin/my_filter.py -f #{file_path}"
+                   stdin, stdout, stderr = Open3.popen3(cmd)
+                   event["process_result"] = stdout.read
+                   err = stderr.read
+                   if err.to_s.empty?
+                     filter_matched(event)
+                   else
+                     event["ext_script_err_msg"] = err
+                   end'</span>
+          <span class="n">remove_field</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="s2">"file_path"</span><span class="p">]</span>
+       <span class="p">}</span>
+    <span class="p">}</span>
+    <span class="c1"># Parsing of the process_result is here (see the next section)</span>
+ <span class="p">}</span></code></pre></figure>
+
+<p>Note:</p>
+
+<ul>
+  <li>External application <code class="highlighter-rouge">/opt/bin/my_filter.py</code> is launched only if <code class="highlighter-rouge">file_path</code> field is not empty.  This field shall be extracted earlier in the filter pipeline. It’s value (<code class="highlighter-rouge">#{file_path}</code>) is used in
+the command line to launch external filter.</li>
+  <li>stdin handle is accessible for our tiny ruby script and it can be used to send more data to the external program (<code class="highlighter-rouge">/opt/bin/my_filter.py</code>).</li>
+  <li>If application stderr is not empty, filter is not considered to be successful and stderr content is recorded into <code class="highlighter-rouge">ext_script_err_msg</code> field.</li>
+  <li>If processing was successful,  output of the external program is recorded into <code class="highlighter-rouge">process_result</code> filed and <code class="highlighter-rouge">file_path</code> field is removed</li>
+</ul>
+
+<h3 id="parsing-output-of-the-external-program-json">Parsing output of the external program (JSON)</h3>
+
+<p>The easiest way to deliver the data back to Logstash is to use one of the structured data formats understood by Logstash filters: <a href="https://www.elastic.co/guide/en/logstash/current/plugins-filters-json.html">JSON</a>,
+<a href="https://www.elastic.co/guide/en/logstash/current/plugins-filters-xml.html">XML</a> or more old-fashioned <a href="https://www.elastic.co/guide/en/logstash/current/plugins-filters-kv.html">key-value (kv)</a>.</p>
+
+<p>Example with JSON:</p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby">  <span class="k">if</span> <span class="p">[</span><span class="n">process_result</span><span class="p">]</span> <span class="o">=~</span> <span class="sr">/.+/</span> <span class="p">{</span>
+       <span class="n">json</span> <span class="p">{</span>
+          <span class="n">source</span> <span class="o">=&gt;</span> <span class="s2">"process_result"</span>
+          <span class="n">remove_field</span> <span class="o">=&gt;</span> <span class="p">[</span> <span class="s2">"process_result"</span> <span class="p">]</span>
+       <span class="p">}</span>
+    <span class="p">}</span></code></pre></figure>
+
+<p>Note:</p>
+
+<ul>
+  <li>Field <code class="highlighter-rouge">process_result</code> holds the output of the external application and is supposed to be in JSON format.</li>
+  <li>If parsing was successful JSON fields are becoming event fields and intermediate field <code class="highlighter-rouge">process_result</code> is removed.</li>
+</ul>
+
+<h3 id="several-words-about-exec-output-plugin">Several words about exec output plugin</h3>
+
+<p>If you only need to launch external utility upon any matched Logstash event, you may consider to use simpler approach
+– <a href="https://www.elastic.co/guide/en/logstash/current/plugins-outputs-exec.html">exec output plugin</a>.</p>
+
+<p>If you liked this post, you can
+<a href="https://twitter.com/intent/tweet?url=http://localhost:4000/Logstash-filter-external-script/&amp;text=How to incorporate external utility scripts into Logstash Pipeline&amp;via=vitalyrepin" target="_blank">
+  share it with your followers</a> 
+or 
+<a href="https://twitter.com/vitalyrepin">
+  follow me on Twitter</a>!</p>
+
+
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/anchor-js/1.2.1/anchor.min.js"></script>
+<script type="text/javascript">
+anchors.options.visible = 'hoover';
+anchors.options.placement = 'left';
+anchors.add();
+anchors.remove('.masthead-title');
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/picturefill/2.3.1/picturefill.min.js"></script>
+
+
+
+
+
+
+
+
+
+<a href="/tag/elasticsearch">#elasticsearch</a>
+
+<a href="/tag/logstash">#logstash</a>
+
+<a href="/tag/ruby">#ruby</a>
+
+
+
+
+
+<div class="related">
+  <h2>Related Posts</h2>
+  <ul class="related-posts">
+    
+  </ul>
+</div>
+
+
+<!-- Analytics begin -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-67139587-1', 'auto');
+  ga('send', 'pageview');
+</script>
+<!-- Analytics end -->
+
+ 
+<div id="disqus_thread"></div>
+<script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES * * */
+    var disqus_shortname = 'vitalyrepinblog';
+    
+    var disqus_identifier = '/Logstash-filter-external-script';
+    var disqus_title = 'How to incorporate external utility scripts into Logstash Pipeline';
+    var disqus_url = 'http://localhost:4000/Logstash-filter-external-script/';
+    
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments powered by Disqus.</a></noscript>
+ 
+
+ <footer class="footer">
+ <small>
+<a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/80x15.png" /></a><span xmlns:dct="http://purl.org/dc/terms/" property="dct:title">The content of this page </span> by <a xmlns:cc="http://creativecommons.org/ns#" href="http://vrepin.org/" property="cc:attributionName" rel="cc:attributionURL">Vitaly Repin</a> is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>,
+	  <time datetime="2017-02-12T10:29:07+02:00">2017</time>.
+	  </small>
+</footer>
+      </div>
+    </div>
+
+    <label for="sidebar-checkbox" class="sidebar-toggle"></label>
+
+    <script>
+      (function(document) {
+        var toggle = document.querySelector('.sidebar-toggle');
+        var sidebar = document.querySelector('#sidebar');
+        var checkbox = document.querySelector('#sidebar-checkbox');
+
+        document.addEventListener('click', function(e) {
+          var target = e.target;
+
+          if(!checkbox.checked ||
+             sidebar.contains(target) ||
+             (target === checkbox || target === toggle)) return;
+
+          checkbox.checked = false;
+        }, false);
+      })(document);
+    </script>
+  </body>
+</html>
