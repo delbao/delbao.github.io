@@ -23,6 +23,21 @@
 {% endfor %}
 	   </small>
 	</h3>
+
+<!-- begin Adil Gabdullin code -->
+{% if page.avatar == true %}
+  <div class="navbar-custom">
+    <div class="avatar-container">
+      <div class="avatar-img-border">
+        <a href="#">
+          <img class="avatar-img" src="{{ site.baseurl }}/public/images/avatar.png"/>
+        </a>
+      </div>
+    </div>
+  </div>
+{% endif %}
+<!-- end Adil Gabdullin code -->
+
         <h3 class="masthead-title"></h3>
         </div>
       </div>
