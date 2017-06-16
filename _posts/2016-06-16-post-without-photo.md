@@ -4,8 +4,8 @@ title: This is my post without photo
 comments: true
 lang: en
 thumbnail: hackergotchi_big.png
-summary: This article describes the approach to call external applications from Logstash Pipeline and use their (JSON/XML/key-value) output in the further filtering process.
-tags: [logstash,elasticsearch,ruby]
+summary: Lorem ipsum dolor sit amet.
+tags: []
 ---
 
 ### Lorem
