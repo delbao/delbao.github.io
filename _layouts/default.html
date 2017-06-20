@@ -25,17 +25,17 @@
 	</h3>
 
 <!-- begin Adil Gabdullin code -->
-
-<div class="navbar-custom">
-  <div class="avatar-container">
-    <div class="avatar-img-border">
-      <a href="#">
-        <img class="avatar-img" src="{{ site.baseurl }}/public/images/avatar.jpeg"/>
-      </a>
+{% if post.avatar %}
+  <div class="navbar-custom">
+    <div class="avatar-container">
+      <div class="avatar-img-border">
+        <a href="#">
+          <img class="avatar-img" src="{{ site.baseurl }}/public/images/avatar.jpeg"/>
+        </a>
+      </div>
     </div>
   </div>
-</div>
-
+{% endif %}
 <!-- end Adil Gabdullin code -->
 
         <h3 class="masthead-title"></h3>
