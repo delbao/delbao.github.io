@@ -1,6 +1,6 @@
 ---
 layout: post
-title: This is my post without photo
+title: avatar false
 avatar: false
 comments: true
 lang: en
