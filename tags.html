@@ -13,7 +13,7 @@ lang: en
     {{ tag[0] }}
   {% endfor %}
 {% endcapture %}
-{% assign sortedtags = tags | split:' ' | sort %}
+{% assign sortedtags = tags | where:"lang", page.lang | split:' ' | sort %}
 
 {% for tag in sortedtags %}
   <h3 id="{{ tag | escape }}">{{ tag }}</h3>
