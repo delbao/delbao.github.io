@@ -9,34 +9,34 @@ summary: This article describes the approach to call external applications from 
 tags: [logstash,elasticsearch,ruby]
 ---
 
-### Overview
+### Aperçu
 
-[Logstash](https://www.elastic.co/products/logstash) is a great tool to process the logs and extract valuable data from them. There are many useful Logstash
-[filter plugins](https://www.elastic.co/guide/en/logstash/current/filter-plugins.html) which make it easy to process the raw log data. However, sometimes
-external utilities are required to process the data in a more complicated way than existing filter plugins can.
+[Logstash](https://www.elastic.co/products/logstash) est un excellent outil pour traiter les journaux et en extraire des données précieuses. Il existe de nombreuses Logstash utiles
+[filter plugins](https://www.elastic.co/guide/en/logstash/current/filter-plugins.html) qui facilitent le traitement des données de journal brut. Cependant, parfois
+Les utilitaires externes sont nécessaires pour traiter les données de manière plus compliquée que les plugins de filtrage existants peuvent.
 
-It's possible to [code your own filter plugin](https://www.elastic.co/guide/en/logstash/current/_how_to_write_a_logstash_filter_plugin.html) in Ruby
-but what to do if you already have the filter implemented in some other programming language and want to reuse it in Logstash?
+Il est possible de [code your own filter plugin](https://www.elastic.co/guide/en/logstash/current/_how_to_write_a_logstash_filter_plugin.html) dans Ruby
+Mais que faire si vous avez déjà le filtre mis en œuvre dans un autre langage de programmation et que vous souhaitez le réutiliser dans Logstash?
 
-In this case it's easier to communicate with this external filter from Logstash. This article demonstrates the simplest way of incorporating external
+Dans ce cas, il est plus facile de communiquer avec ce filtre externe à partir de Logstash. Cet article démontre la manière la plus simple d'intégrer les données externes
 
-applications into the Logstash pipeline:
+Applications dans le pipeline Logstash:
 
-1. Logstash launches external program and delivers the input data to it through command line arguments and stdin
-1. External program writes results to stdout in any format understood by Logstash filters (e.g., JSON)
-1. Logstash parses output of the external program and continues to handle it in the pipeline
+1. Logstash lance un programme externe et envoie les données d'entrée à travers les arguments de ligne de commande et stdin
+1. Le programme externe écrit des résultats à stdout dans n'importe quel format compris par les filtres Logstash (par exemple, JSON)
+1. Logstash analyse la sortie du programme externe et continue de le gérer dans le pipeline
 
-It's needless to say that it is not the very best approach in terms of performance.
-E.g., if startup time of the external application is significant, you may consider
-to launch this application once (as a daemon/service) and communicate with it using [ØMQ](http://en.wikipedia.org/wiki/%C3%98MQ) or other high-performance message queue.
+Il est inutile de dire que ce n'est pas la meilleure approche en termes de performance.
+E.g., si le temps de démarrage de l'application externe est significatif, vous pouvez considérer
+Pour lancer cette application une fois (en tant que démon / service) et communiquer avec elle en utilisant [ØMQ] (http://en.wikipedia.org/wiki/%C3%98MQ) ou d'autres files d'attente de messages haute performance.
 
-Detailed explanation and usage example are stated below.
+L'explication détaillée et l'exemple d'utilisation sont indiqués ci-dessous.
 
 
 
-## Launching external program
+## Lancement du programme externe
 
-We will use [ruby filter](https://www.elastic.co/guide/en/logstash/current/plugins-filters-ruby.html) in order to launch external application and capture its output:
+Nous utiliserons [ruby filter] (https://www.elastic.co/guide/en/logstash/current/plugins-filters-ruby.html) afin de lancer une application externe et de capturer sa sortie:
 
 {% highlight ruby %}
 filter {
@@ -62,21 +62,21 @@ filter {
  }
 {% endhighlight %}
 
-Note:
+Remarque:
 
-+ External application ```/opt/bin/my_filter.py``` is launched only if ```file_path``` field is not empty.  This field shall be extracted earlier in the filter pipeline. It's value (```#{file_path}```) is used in
-the command line to launch external filter.
-+ stdin handle is accessible for our tiny ruby script and it can be used to send more data to the external program (```/opt/bin/my_filter.py```).
-+ If application stderr is not empty, filter is not considered to be successful and stderr content is recorded into ```ext_script_err_msg``` field.
-+ If processing was successful,  output of the external program is recorded into ```process_result``` filed and ```file_path``` field is removed
++ L'application externe `` `/ opt / bin / my_filter.py``` est lancée uniquement si le champ` `` file_path``` n'est pas vide. Ce champ doit être extrait plus tôt dans le pipeline du filtre. C'est la valeur (`` `# {file_path}` ``) est utilisé dans
+La ligne de commande pour lancer un filtre externe.
++ Stdin handle est accessible pour notre petit script ruby ​​et il peut être utilisé pour envoyer plus de données au programme externe (`` `/ opt / bin / my_filter.py```).
++ Si l'application stderr n'est pas vide, le filtre n'est pas considéré comme réussi et le contenu de stderr est enregistré dans le champ `` `ext_script_err_msg```.
++ Si le traitement a réussi, la sortie du programme externe est enregistrée dans `` `process_result``` déposé et le champ` `file_path``` est supprimé
 
-### Parsing output of the external program (JSON)
+### Analyse de la sortie du programme externe (JSON)
 
-The easiest way to deliver the data back to Logstash is to use one of the structured data formats understood by Logstash filters: [JSON](https://www.elastic.co/guide/en/logstash/current/plugins-filters-json.html),
-[XML](https://www.elastic.co/guide/en/logstash/current/plugins-filters-xml.html) or more old-fashioned [key-value (kv)](https://www.elastic.co/guide/en/logstash/current/plugins-filters-kv.html).
+La manière la plus simple de remettre les données à Logstash consiste à utiliser l'un des formats de données structurés compris par les filtres Logstash: [JSON](https://www.elastic.co/guide/fr/logstash/current/plugins-filters- Json.html),
+[XML](https://www.elastic.co/guide/en/logstash/current/plugins-filters-xml.html) ou plus ancien [key-value (kv)](https: // www. Elastic.co/guide/en/logstash/current/plugins-filters-kv.html).
 
 
-Example with JSON:
+Exemple avec JSON:
 
 {% highlight ruby %}
   if [process_result] =~ /.+/ {
@@ -87,14 +87,14 @@ Example with JSON:
     }
 {% endhighlight %}
 
-Note:
+Remarque:
 
-+ Field ```process_result``` holds the output of the external application and is supposed to be in JSON format.
-+ If parsing was successful JSON fields are becoming event fields and intermediate field ```process_result``` is removed.
++ Le champ `` `process_result``` contient la sortie de l'application externe et est censé être au format JSON.
++ Si l'analyse a été effectuée, les champs JSON deviennent des champs d'événement et le champ intermédiaire `` `process_result``` est supprimé.
 
-### Several words about exec output plugin
+### Plusieurs mots sur le plugin de sortie exec
 
-If you only need to launch external utility upon any matched Logstash event, you may consider to use simpler approach
-– [exec output plugin](https://www.elastic.co/guide/en/logstash/current/plugins-outputs-exec.html).
+Si vous avez seulement besoin de lancer un utilitaire externe lors d'un événement Logstash apparié, vous pouvez envisager d'utiliser une approche plus simple
+- [exec output plugin](https://www.elastic.co/guide/fr/logstash/current/plugins-outputs-exec.html).
 
 {% include twitter_plug.html %}
