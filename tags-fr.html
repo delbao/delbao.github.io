@@ -20,9 +20,7 @@ FRFRFRFRFR
   <h3 id="{{ tag | escape }}">{{ tag }}</h3>
   <ul>
   {% for post in site.tags[tag] %}
-    {% if post.lang == page.lang %}
       <li><a href="{{site.baseurl}}{{ post.url }}">{{ post.title }}</a></li>
-    {% endif %}
   {% endfor %}
   </ul>
 {% endfor %}
