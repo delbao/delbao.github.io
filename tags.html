@@ -21,6 +21,8 @@ lang: en
   {% for post in site.tags[tag] %}
     {% if post.lang = page.lang %}
         <li><a href="{{site.baseurl}}{{ post.url }}">{{ post.title }}</a></li>
+        <li>{{post.lang}}</li>
+        <li>{{page.lang}}</li>
     {% endif %}
   {% endfor %}
   </ul>
