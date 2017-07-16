@@ -20,8 +20,9 @@ lang: en
   <ul>
   {% for post in site.tags[tag] %}
         <li><a href="{{site.baseurl}}{{ post.url }}">{{ post.title }}</a></li>
-        <li>({{post.lang}})</li>
-        <!-- <li>{{page.lang}}</li> -->
+        <li>post.lang = {{post.lang}})</li>
+        <li>page.lang = {{page.lang}})</li>
+        <li>lang = {{lang}})</li>
   {% endfor %}
   </ul>
 {% endfor %}
