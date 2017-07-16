@@ -1,8 +1,8 @@
 ---
 layout: post
-title: How to incorporate external utility scripts into Logstash Pipeline
+title: Comment intégrer des scripts d'utilité externe dans Logstash Pipeline
 comments: true
-lang: en
+lang: fr
 ref: pipeline
 thumbnail: hackergotchi_big.png
 summary: This article describes the approach to call external applications from Logstash Pipeline and use their (JSON/XML/key-value) output in the further filtering process.
