@@ -18,7 +18,25 @@ avatar: true
         </a>
       </h1>
 
-      <time datetime="{{ post.date | date_to_xmlschema }}" class="post-date">{{ post.date | date_to_string }}</time>
+      <time datetime="{{ post.date | date_to_xmlschema }}" class="post-date">
+        {% assign m = page.date | date: "%-m" %}
+        {{ page.date | date: "%Y" }}
+        {% case m %}
+          {% when '1' %}一月
+          {% when '2' %}二月
+          {% when '3' %}三月
+          {% when '4' %}四月
+          {% when '5' %}五月
+          {% when '6' %}六月
+          {% when '7' %}七月
+          {% when '8' %}八月
+          {% when '9' %}九月
+          {% when '10' %}十月
+          {% when '11' %}十一月
+          {% when '12' %}十二月
+        {% endcase %}
+        {{ page.date | date: "%-d" }}
+      </time>
       {% if post.content contains site.excerpt_separator %}
       {{ post.excerpt }}
       {% else %}
