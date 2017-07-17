@@ -8,7 +8,6 @@ lang: fr
 avatar: true
 ---
 <div class="posts">
-  <h1 class="page-heading">Articles</h1>
   <ul class="post-list">
     {% assign posts=site.posts | where:"lang", page.lang %}
     {% for post in posts %}
@@ -27,7 +26,7 @@ avatar: true
       {{ post.excerpt | truncatewords:26}}
       {% endif %}
 
-      <p><a class="btn btn-sm btn-primary" href="{{site.baseurl}}{{ post.url }}#read-more" role="button">Read more <i class="fa fa-arrow-circle-right"></i></a>
+      <p><a class="btn btn-sm btn-primary" href="{{site.baseurl}}{{ post.url }}#read-more" role="button">Lire la suite <i class="fa fa-arrow-circle-right"></i></a>
       </p>
 
 
@@ -38,18 +37,4 @@ avatar: true
     {% endfor %}
   </ul>
 </div>
-
-<div class="pagination">
-  {% if paginator.next_page %}
-    <a class="pagination-item older" href="{{ paginator.next_page_path | prepend: site.baseurl }}">Older</a>
-  {% else %}
-    <span class="pagination-item older">Older</span>
-  {% endif %}
-  {% if paginator.previous_page %}
-    <a class="pagination-item newer" href="{{ paginator.previous_page_path | prepend: site.baseurl }}">Newer</a>
-  {% else %}
-    <span class="pagination-item newer">Newer</span>
-  {% endif %}
-</div>
-
 {% include analytics.html %}
