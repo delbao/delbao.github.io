@@ -8,7 +8,6 @@ lang: fr
 avatar: true
 ---
 <div class="posts">
-  <ul class="post-list">
     {% assign posts=site.posts | where:"lang", page.lang %}
     {% for post in posts %}
     {% if post.lang == page.lang %}
@@ -35,6 +34,5 @@ avatar: true
     </article>
     {% endif %}
     {% endfor %}
-  </ul>
 </div>
 {% include analytics.html %}
