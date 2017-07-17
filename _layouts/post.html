@@ -23,9 +23,9 @@ anchors.remove('.masthead-title');
 
 <div class="related">
   {% case page.lang %}
-      {% 'en' %}
+      {% when 'en' %}
         <h2>Related Posts</h2>
-      {% 'fr' %}
+      {% when 'fr' %}
         <h2>Lire la suite</h2>
       {% else %}
         <h2>Related</h2>
