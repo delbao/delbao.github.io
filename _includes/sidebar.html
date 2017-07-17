@@ -9,11 +9,6 @@
   </div>
 
   <nav class="sidebar-nav">
-<!--     <a class="sidebar-nav-item{% if page.url == site.baseurl %} active{% endif %}" href="{{ site.baseurl }}/about">About</a>
-    <a class="sidebar-nav-item{% if page.url == site.baseurl %} active{% endif %}" href="{{ site.baseurl }}/tags">Tags</a>
-    <a class="sidebar-nav-item{% if page.url == site.baseurl %} active{% endif %}" href="{{ site.baseurl }}/atom.xml">Feed</a>
-    <a class="sidebar-nav-item{% if page.url == site.baseurl %} active{% endif %}" href="{{ site.baseurl }}/">Latest posts</a>
- -->
         {% assign pages=site.pages | where:"lang", page.lang %}
         {% for my_page in pages %}
           {% if my_page.title %}

@@ -1,12 +1,11 @@
 ---
 layout: post
-title: Health
+title: The Website Speed Test Image Analysis Tool
 comments: true
 lang: en
+ref: smash
 tags: [smashingmagazine]
 ---
-
-### The Website Speed Test Image Analysis Tool
 
 ## By Eric Portis
 
