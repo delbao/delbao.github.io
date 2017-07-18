@@ -24,10 +24,10 @@
 
 <!-- begin multilang-->
     <span style="float: right">
-      {% assign posts=site.posts | where:"ref", page.ref | sort: 'lang' | reverse %}
+      {% assign posts=site.posts | where:"ref", page.ref | sort: 'lang' %}
       {% for post in posts %} <a href="{{ post.url | prepend: site.baseurl }}" class="{{ post.lang }}">{{ post.lang }}</a>{% endfor %}
 
-      {% assign pages=site.pages | where:"ref", page.ref | sort: 'lang' | reverse %}
+      {% assign pages=site.pages | where:"ref", page.ref | sort: 'lang' %}
       {% for page in pages %}
         {% if page.ref != 'index' or page.lang != 'en' or page.url == '/' %}
           <a href="{{ page.url | prepend: site.baseurl }}" class="{{ page.lang }}">{{ page.lang }}</a>
