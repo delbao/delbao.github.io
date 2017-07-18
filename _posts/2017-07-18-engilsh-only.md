@@ -3,7 +3,7 @@ layout: post
 title: The Website Speed Test Image Analysis Tool
 comments: true
 lang: en
-ref: smash
+ref: speed
 tags: [smashingmagazine]
 ---
 

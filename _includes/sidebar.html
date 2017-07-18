@@ -12,7 +12,9 @@
         {% assign pages=site.pages | where:"lang", page.lang %}
         {% for my_page in pages %}
           {% if my_page.title %}
-            <a class="sidebar-nav-item{% if page.url == site.baseurl %} active{% endif %}" href="{{ my_page.url | prepend: site.baseurl }}">{{ my_page.title }}</a>
+            {% if page.ref != 'index' or page.lang != 'en' or page.url == '/' %}
+              <a class="sidebar-nav-item{% if page.url == site.baseurl %} active{% endif %}" href="{{ my_page.url | prepend: site.baseurl }}">{{ my_page.title }}</a>
+            {% endif %}
           {% endif %}
         {% endfor %}
 
