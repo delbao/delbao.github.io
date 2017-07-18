@@ -28,7 +28,16 @@
       {% for post in posts %} <a href="{{ post.url | prepend: site.baseurl }}" class="{{ post.lang }}">{{ post.lang }}</a>{% endfor %}
 
       {% assign pages=site.pages | where:"ref", page.ref | sort: 'lang' %}
-      {% for page in pages %} <a href="{{ page.url | prepend: site.baseurl }}" class="{{ page.lang }}">{{ page.lang }}</a>{% endfor %}
+      {% for page in pages %}
+        {% if page.ref == index %}
+          {% if page.url == / or page.lang != en %}
+            <a href="{{ page.url | prepend: site.baseurl }}" class="{{ page.lang }}">{{ page.lang }}</a>
+          {% endif %}
+        {% else %}
+          <a href="{{ page.url | prepend: site.baseurl }}" class="{{ page.lang }}">{{ page.lang }}</a>
+        {% endif %}
+
+      {% endfor %}
     </span>
 <!-- end multilang-->
 
@@ -53,12 +62,6 @@
       </div>
 
       <div class="container content">
-        <!-- debug -->
-        <div>
-          page.ref = "{{page.ref}}"<br>
-          page.url = "{{page.url}}"<br>
-        </div>
-        <!-- end debug -->
         {{ content }}
 
 <!-- Analytics begin -->
