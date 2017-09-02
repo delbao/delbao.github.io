@@ -5,7 +5,7 @@
 
 highlighter: rouge
 
-timezone: Europe/Helsinki
+timezone: US/Pacific
 
 # Default YAML frontmatter settings
 defaults:
@@ -53,7 +53,7 @@ sass:
 author:
   name:              Del Bao
   url:               https://twitter.com/delbao1
-  email:             #vitaly_repin@fsfe.org
+  email:             dbao@ncsu.edu
 
 # Custom vars
 version:             1.0.0
