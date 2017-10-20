@@ -4,7 +4,6 @@
   {% include head.html %}
 
   <body>
-
     {% include sidebar.html %}
 
     <!-- Wrap is the content to shift when toggling the sidebar. We wrap the
@@ -22,6 +21,21 @@
   <small><a href="{{ page[1]  }}">{{ page[0] }}</a></small>
 {% endfor %}
 	   </small>
+
+<!-- begin multilang-->
+    <span style="float: right">
+      {% assign posts=site.posts | where:"ref", page.ref | sort: 'lang' | reverse %}
+      {% for post in posts %} <a href="{{ post.url | prepend: site.baseurl }}" class="{{ post.lang }}">{{ post.lang }}</a>{% endfor %}
+
+      {% assign pages=site.pages | where:"ref", page.ref | sort: 'lang' | reverse %}
+      {% for page in pages %}
+        {% if page.ref != 'index' or page.lang != 'en' or page.url == '/' %}
+          <a href="{{ page.url | prepend: site.baseurl }}" class="{{ page.lang }}">{{ page.lang }}</a>
+        {% endif %}
+      {% endfor %}
+    </span>
+<!-- end multilang-->
+
 	</h3>
 
 <!-- begin Adil Gabdullin code -->
@@ -79,7 +93,7 @@
 
  <footer class="footer">
  <small>
-   Footer goes here.Lorem ipsum dolor sit amet, in ius doctus convenire temporibus.
+   <!-- Footer goes here.Lorem ipsum dolor sit amet, in ius doctus convenire temporibus. -->
 	  </small>
 </footer>
       </div>
