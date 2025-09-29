@@ -32,6 +32,11 @@ jobs:
           submodules: 'true'
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Prepare public media from _posts
+        run: |
+          mkdir -p assets/posts_media
+          rsync -av --delete --prune-empty-dirs \
+            "_posts/media/" "assets/posts_media/" || true
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
         with:
