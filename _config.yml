@@ -36,7 +36,7 @@ locale:             en_US
 image_base:          /public/images/
 
 # Do not copy these files to the output directory
-exclude: ["transfer.sh", "README.md", "instructions.md"]
+exclude: ["transfer.sh", "README.md", "instructions.md", "_private_posts/README.md"]
 
 #fb_appid:           337414769782635
 

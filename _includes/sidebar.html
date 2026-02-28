@@ -13,6 +13,9 @@
     <a class="sidebar-nav-item{% if page.url == site.baseurl %} active{% endif %}" href="{{ site.baseurl }}/tags">Tags</a>
     <a class="sidebar-nav-item{% if page.url == site.baseurl %} active{% endif %}" href="{{ site.baseurl }}/atom.xml">Feed</a>
     <a class="sidebar-nav-item{% if page.url == site.baseurl %} active{% endif %}" href="{{ site.baseurl }}/">Latest posts</a>
+    {% if site.private_posts and site.private_posts.size > 0 %}
+    <a class="sidebar-nav-item{% if page.url == '/private/' %} active{% endif %}" href="{{ site.baseurl }}/private/">Private posts</a>
+    {% endif %}
 
   <ul class="posts">
 	{% for post in site.posts limit:20 %}

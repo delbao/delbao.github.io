@@ -28,6 +28,11 @@ ChatGPT -> Mermaid -> Exclidraw
 Add media files to \_posts/media/. At build time, Github Actions copy them to
 /assets/posts_media/
 
+Local builds use the same explicit copy step. This repository keeps that logic
+outside Jekyll as a workflow step rather than a custom plugin so local behavior
+matches GitHub Actions and GitHub Pages remains on the standard Pages build
+path.
+
 ## 3. Formatting
 
 ## 4. Private posts
@@ -50,8 +55,7 @@ GitHub Actions builds the public site with this flow:
 
 ```bash
 git submodule update --init _posts
-rsync _posts/media/ assets/posts_media/
-bundle exec jekyll build
+make build
 ```
 
 That workflow intentionally does not initialize `_private_posts`.
@@ -72,7 +76,7 @@ initialize both submodules before building:
 
 ```bash
 git submodule update --init _posts _private_posts
-bundle exec jekyll build
+make build
 ```
 
 That private build path behaves like this:
@@ -83,3 +87,12 @@ That private build path behaves like this:
 - The build command stays the same; only the checkout step changes.
 
 In short: same build, different checkout.
+
+For local development, use:
+
+```bash
+make serve
+```
+
+That target mirrors the GitHub Actions media preparation step before starting
+Jekyll.
