@@ -28,8 +28,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: 'true'
+      - name: Checkout public posts submodule
+        run: |
+          git config --global url."https://github.com/".insteadOf git@github.com:
+          git submodule update --init _posts
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Prepare public media from _posts

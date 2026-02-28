@@ -1,3 +1,6 @@
 [submodule "_posts"]
 	path = _posts
 	url = git@github.com:delbao/delbao.github.io-posts.git
+[submodule "_private_posts"]
+	path = _private_posts
+	url = git@github.com:delbao/delbao.github.io-private-posts.git

@@ -1,3 +1,6 @@
 _site/
 .sass-cache/
 .jekyll-metadata
+AGENTS.md
+.ruby-version
+Gemfile.lock

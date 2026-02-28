@@ -15,6 +15,13 @@ defaults:
       type: "posts"
     values:
       comments: true
+  -
+    scope:
+      path: ""
+      type: "private_posts"
+    values:
+      layout: post
+      comments: false
 
 # Tagging settings
 tag_title_prefix:   "Posts tagged #"
@@ -28,8 +35,8 @@ locale:             en_US
 # Image settings
 image_base:          /public/images/
 
-# Do not copy these file to the output directory
-exclude: ["transfer.sh", README.md]
+# Do not copy these files to the output directory
+exclude: ["transfer.sh", "README.md", "instructions.md"]
 
 #fb_appid:           337414769782635
 
@@ -97,3 +104,7 @@ picture:
 
 google_analytics: G-4M6RGCGR4G
 
+collections:
+  private_posts:
+    output: true
+    permalink: /private/:year/:month/:day/:title/
