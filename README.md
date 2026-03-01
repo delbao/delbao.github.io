@@ -156,8 +156,15 @@ real-name guess, the speaker map falls back to the original speaker IDs.
 
 The tool writes:
 
-- `*.summary.md` for the final summary
-- `*.llm-input.txt` for the processed transcript sent to the model
+- one post-ready markdown file under `_private_posts/`
+
+That generated private post contains:
+
+- the final summary as the visible post body
+- the processed transcript in front matter as `raw_llm_input`
+
+The post layout renders `raw_llm_input` inside a collapsed `<details>` block,
+so the raw input is present in the HTML but hidden unless expanded.
 
 After the LLM response, the code also:
 

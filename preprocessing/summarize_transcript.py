@@ -7,6 +7,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
@@ -16,8 +17,10 @@ DEFAULT_MODEL = os.environ.get("TRANSCRIPT_SUMMARY_MODEL", "gpt-4.1-mini")
 FUZZY_NAME_THRESHOLD = 0.8
 PHONETIC_FUZZY_NAME_THRESHOLD = 0.55
 PREPROCESSING_DIR = Path(__file__).resolve().parent
+REPO_ROOT = PREPROCESSING_DIR.parent
 PROMPTS_DIR = PREPROCESSING_DIR / "prompts"
 SPEAKER_NAME_CORRECTIONS_PATH = PREPROCESSING_DIR / "speaker_name_corrections.json"
+PRIVATE_POSTS_DIR = REPO_ROOT / "_private_posts"
 
 
 @dataclass
@@ -389,11 +392,90 @@ def summarize_meeting_transcript(
 
 
 def default_output_path(input_path: Path) -> Path:
-    return input_path.with_suffix("").with_suffix(".summary.md")
+    date_value, title = derive_post_metadata(input_path)
+    return PRIVATE_POSTS_DIR / f"{date_value:%Y-%m-%d}-{slugify(title)}.md"
 
 
-def default_llm_input_path(input_path: Path) -> Path:
-    return input_path.with_suffix("").with_suffix(".llm-input.txt")
+def derive_post_metadata(input_path: Path) -> tuple[datetime, str]:
+    normalized_name = input_path.name.replace("\u202f", " ").replace("\xa0", " ")
+    match = re.search(
+        r"(?P<date>\d{4}-\d{2}-\d{2})(?:\s+at)?\s+"
+        r"(?P<hour>\d{1,2})[.\-:](?P<minute>\d{2})[.\-:](?P<second>\d{2})"
+        r"(?:\s*(?P<ampm>AM|PM))?",
+        normalized_name,
+        re.IGNORECASE,
+    )
+
+    if match:
+        hour = int(match.group("hour"))
+        ampm = match.group("ampm")
+        if ampm:
+            upper_ampm = ampm.upper()
+            if upper_ampm == "PM" and hour != 12:
+                hour += 12
+            if upper_ampm == "AM" and hour == 12:
+                hour = 0
+        date_value = datetime(
+            year=int(match.group("date")[0:4]),
+            month=int(match.group("date")[5:7]),
+            day=int(match.group("date")[8:10]),
+            hour=hour,
+            minute=int(match.group("minute")),
+            second=int(match.group("second")),
+        )
+        title_source = normalized_name[: match.start()].strip(" -_.")
+    else:
+        date_only = re.search(r"(?P<date>\d{4}-\d{2}-\d{2})", normalized_name)
+        if date_only:
+            date_value = datetime(
+                year=int(date_only.group("date")[0:4]),
+                month=int(date_only.group("date")[5:7]),
+                day=int(date_only.group("date")[8:10]),
+            )
+            title_source = normalized_name[: date_only.start()].strip(" -_.")
+        else:
+            date_value = datetime.fromtimestamp(input_path.stat().st_mtime)
+            title_source = normalized_name
+
+    title_source = re.sub(
+        r"(\.(mp4|webm|mov))?\.smart\.diarization\.jsonl$",
+        "",
+        title_source,
+        flags=re.IGNORECASE,
+    ).strip(" -_.")
+    if not title_source:
+        title_source = input_path.stem
+
+    return date_value, title_source
+
+
+def slugify(text: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return slug or "meeting-summary"
+
+
+def indent_block(text: str, spaces: int = 2) -> str:
+    prefix = " " * spaces
+    return "\n".join(f"{prefix}{line}" if line else prefix for line in text.splitlines())
+
+
+def compose_post_markdown(
+    input_path: Path,
+    result: SummaryResult,
+) -> str:
+    date_value, title = derive_post_metadata(input_path)
+    front_matter = [
+        "---",
+        "layout: post",
+        f'title: {json.dumps(title)}',
+        f'date: "{date_value:%Y-%m-%d %H:%M:%S}"',
+        "comments: false",
+        "raw_llm_input: |",
+        indent_block(result.rendered_transcript),
+        "---",
+        "",
+    ]
+    return "\n".join(front_matter) + result.summary_markdown.rstrip() + "\n"
 
 
 def parse_args() -> argparse.Namespace:
@@ -436,12 +518,8 @@ def main() -> int:
 
     output_path = (args.output or default_output_path(args.transcript)).expanduser()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(result.summary_markdown + "\n", encoding="utf-8")
-    default_llm_input_path(args.transcript).expanduser().write_text(
-        result.rendered_transcript + "\n",
-        encoding="utf-8",
-    )
-    print(f"Wrote summary to {output_path}")
+    output_path.write_text(compose_post_markdown(args.transcript, result), encoding="utf-8")
+    print(f"Wrote post to {output_path}")
     return 0
 
 
