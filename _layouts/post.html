@@ -8,7 +8,7 @@ layout: default
   {{ content | replace: '<!--break-->', '<a class="anchor" name="read-more"></a>' }}
   {% if page.raw_llm_input %}
   <details class="raw-llm-input">
-    <summary>Raw LLM Input</summary>
+    <summary>Raw Transcript</summary>
     <pre><code>{{ page.raw_llm_input | escape }}</code></pre>
   </details>
   {% endif %}

@@ -11,7 +11,7 @@
     {% if post.content contains site.excerpt_separator %}
     {{ post.excerpt }}
     {% else %}
-    {{ post.excerpt | truncatewords:26}}
+    {{ post.excerpt | strip_html | truncatewords:26 }}
     {% endif %}
 
     <p><a class="btn btn-sm btn-primary" href="{{site.baseurl}}{{ post.url }}#read-more" role="button">Read more <i class="fa fa-arrow-circle-right"></i></a>
@@ -21,4 +21,3 @@
   </article>
   {% endfor %}
 </div>
-

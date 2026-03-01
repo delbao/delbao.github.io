@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import suppress
 import difflib
 import json
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
@@ -15,6 +17,8 @@ from typing import Iterable
 
 
 DEFAULT_MODEL = os.environ.get("TRANSCRIPT_SUMMARY_MODEL", "gpt-4.1-mini")
+DEFAULT_LLM_TIMEOUT_SECONDS = float(os.environ.get("TRANSCRIPT_SUMMARY_TIMEOUT_SECONDS", "90"))
+DEFAULT_LLM_RETRIES = int(os.environ.get("TRANSCRIPT_SUMMARY_RETRIES", "2"))
 FUZZY_NAME_THRESHOLD = 0.8
 PHONETIC_FUZZY_NAME_THRESHOLD = 0.55
 PREPROCESSING_DIR = Path(__file__).resolve().parent
@@ -240,10 +244,12 @@ def render_transcript_with_speaker_names(
 
 def call_llm(model: str, system_prompt: str, user_prompt: str) -> str:
     LOGGER.info(
-        "Calling LLM model=%s system_chars=%s user_chars=%s",
+        "Calling LLM model=%s system_chars=%s user_chars=%s timeout=%ss retries=%s",
         model,
         len(system_prompt),
         len(user_prompt),
+        DEFAULT_LLM_TIMEOUT_SECONDS,
+        DEFAULT_LLM_RETRIES,
     )
     try:
         from litellm import completion
@@ -253,15 +259,34 @@ def call_llm(model: str, system_prompt: str, user_prompt: str) -> str:
             "`pip install -r preprocessing/requirements.txt`."
         ) from exc
 
-    response = completion(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.2,
-    )
-    LOGGER.info("Received LLM response from model=%s", model)
+    last_error: Exception | None = None
+    for attempt in range(1, DEFAULT_LLM_RETRIES + 2):
+        try:
+            LOGGER.info("LLM request attempt %s/%s", attempt, DEFAULT_LLM_RETRIES + 1)
+            response = completion(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.2,
+                timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
+                response_format={"type": "json_object"},
+            )
+            LOGGER.info("Received LLM response from model=%s", model)
+            break
+        except Exception as exc:
+            last_error = exc
+            LOGGER.warning("LLM request attempt %s failed: %s", attempt, exc)
+            if attempt > DEFAULT_LLM_RETRIES:
+                raise
+            sleep_seconds = min(2 ** (attempt - 1), 8)
+            LOGGER.info("Retrying LLM request in %ss", sleep_seconds)
+            time.sleep(sleep_seconds)
+    else:
+        assert last_error is not None
+        raise last_error
+
     message = response.choices[0].message
     content = getattr(message, "content", None)
     if isinstance(content, str):
@@ -286,7 +311,17 @@ def extract_json_object(text: str) -> dict[str, object]:
         if start != -1 and end != -1 and end > start:
             candidate = candidate[start : end + 1]
 
-    parsed = json.loads(candidate)
+    try:
+        parsed = json.loads(candidate)
+    except json.JSONDecodeError:
+        with suppress(ImportError, ValueError, TypeError):
+            from json_repair import repair_json
+
+            repaired = repair_json(candidate, return_objects=True)
+            if isinstance(repaired, dict):
+                LOGGER.info("Recovered malformed LLM JSON response with json_repair")
+                return repaired
+        raise
     if not isinstance(parsed, dict):
         raise ValueError("Expected a JSON object from LLM response")
     return parsed
@@ -371,9 +406,29 @@ def summarize_with_speaker_mapping(
         speaker_list=speaker_list,
         transcript_text=transcript_text,
     )
-    raw_response = call_llm(model, system_prompt, user_prompt)
-    parsed = extract_json_object(raw_response)
-    LOGGER.info("Parsed structured LLM response")
+    raw_response = ""
+    parsed: dict[str, object] | None = None
+    for attempt in range(1, DEFAULT_LLM_RETRIES + 2):
+        raw_response = call_llm(model, system_prompt, user_prompt)
+        try:
+            parsed = extract_json_object(raw_response)
+            LOGGER.info("Parsed structured LLM response")
+            break
+        except json.JSONDecodeError as exc:
+            LOGGER.warning(
+                "Failed to parse LLM JSON response on attempt %s/%s: %s",
+                attempt,
+                DEFAULT_LLM_RETRIES + 1,
+                exc,
+            )
+            LOGGER.warning("Raw LLM response prefix: %r", raw_response[:1000])
+            if attempt > DEFAULT_LLM_RETRIES:
+                raise
+            sleep_seconds = min(2 ** (attempt - 1), 8)
+            LOGGER.info("Retrying full LLM call after parse failure in %ss", sleep_seconds)
+            time.sleep(sleep_seconds)
+    if parsed is None:
+        raise ValueError("Failed to parse structured LLM response")
 
     raw_speaker_map = parsed.get("speaker_map", {})
     if not isinstance(raw_speaker_map, dict):
@@ -538,6 +593,18 @@ def parse_args() -> argparse.Namespace:
         help="LiteLLM model string, e.g. gpt-4.1-mini or gemini/gemini-2.0-flash",
     )
     parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=DEFAULT_LLM_TIMEOUT_SECONDS,
+        help="Per-request LLM timeout in seconds.",
+    )
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=DEFAULT_LLM_RETRIES,
+        help="Number of retries for timeout/provider failures and malformed JSON responses.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         help="Optional markdown output path. Defaults next to the input file.",
@@ -556,10 +623,19 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    global DEFAULT_LLM_TIMEOUT_SECONDS
+    global DEFAULT_LLM_RETRIES
     args = parse_args()
+    DEFAULT_LLM_TIMEOUT_SECONDS = args.timeout_seconds
+    DEFAULT_LLM_RETRIES = args.retries
     log_path = (args.log_path or default_log_path(args.transcript)).expanduser()
     setup_logging(log_path)
-    LOGGER.info("Starting summarization for %s", args.transcript)
+    LOGGER.info(
+        "Starting summarization for %s with timeout=%ss retries=%s",
+        args.transcript,
+        DEFAULT_LLM_TIMEOUT_SECONDS,
+        DEFAULT_LLM_RETRIES,
+    )
     result = summarize_meeting_transcript(
         transcript_path=args.transcript,
         model=args.model,

@@ -136,6 +136,15 @@ The summarizer logs progress to both stderr and a per-transcript log file under
 `preprocessing/logs/` by default. You can override the file path with
 `--log-path`.
 
+Long LLM calls are bounded with a per-request timeout and retry policy. By
+default each request times out after 90 seconds and the script retries twice
+for provider failures, timeouts, and malformed JSON responses. You can
+override those defaults per run with `--timeout-seconds` and `--retries`.
+
+Structured summary responses are requested in JSON mode, and the script also
+attempts a local JSON repair pass before retrying when a provider returns
+slightly malformed JSON.
+
 The summarizer uses LiteLLM's Python SDK `completion(...)` interface rather
 than a custom provider client so the same script can switch models by changing
 the model string and environment variables. See the LiteLLM repo and docs for
