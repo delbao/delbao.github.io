@@ -63,3 +63,11 @@ Examples of rules that should be added here:
 - review or verification expectations
 
 Do not silently rely on repeated conversational memory when a stable project rule should instead be written into this file.
+
+## 5. Local Tooling Layout
+
+Python preprocessing and transcript-processing code for this repository should
+live under a root-level `preprocessing/` directory.
+
+Repository-local Python virtual environments should live in `.venv/` at the
+repository root and stay untracked.

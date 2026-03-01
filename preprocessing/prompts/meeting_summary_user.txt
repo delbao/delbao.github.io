@@ -1,0 +1,32 @@
+Process the meeting transcript "{source_name}".
+
+Return only a JSON object with exactly these top-level keys:
+- "speaker_map": object mapping each speaker ID to a display name
+- "summary_markdown": string containing the final markdown summary
+
+The summary markdown must contain exactly these sections:
+# Meeting Summary
+## Overview
+## Decisions
+## Action Items
+## Risks / Blockers
+## Open Questions
+## Notable Quotes
+
+Rules:
+- Every input speaker ID must appear exactly once in "speaker_map".
+- If the transcript does not clearly identify a speaker, keep the original ID as the value.
+- Do not invent names that are not supported by the transcript.
+- Use concise display names like "Del", "Andy", or "Ati" when strongly supported.
+- Keep the summary factual and concise.
+- Use bullet points for all sections except Overview.
+- Use 'None noted.' when a section is empty.
+- Include short direct quotes only when especially useful.
+- Treat repeated filler or transcription noise as low-signal unless it affects meaning.
+- Do not include explanations, markdown fences, or extra keys outside the JSON object.
+
+Speaker IDs:
+{speaker_list}
+
+Transcript:
+{transcript_text}

@@ -4,3 +4,7 @@ _site/
 AGENTS.md
 .ruby-version
 Gemfile.lock
+.venv/
+.env
+.env.local
+preprocessing/__pycache__/
