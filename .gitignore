@@ -8,3 +8,4 @@ Gemfile.lock
 .env
 .env.local
 preprocessing/__pycache__/
+preprocessing/logs/

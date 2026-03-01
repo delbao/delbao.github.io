@@ -132,6 +132,10 @@ make summarize-transcript \
   MODEL="gemini/gemini-2.0-flash"
 ```
 
+The summarizer logs progress to both stderr and a per-transcript log file under
+`preprocessing/logs/` by default. You can override the file path with
+`--log-path`.
+
 The summarizer uses LiteLLM's Python SDK `completion(...)` interface rather
 than a custom provider client so the same script can switch models by changing
 the model string and environment variables. See the LiteLLM repo and docs for

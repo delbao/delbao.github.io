@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ REPO_ROOT = PREPROCESSING_DIR.parent
 PROMPTS_DIR = PREPROCESSING_DIR / "prompts"
 SPEAKER_NAME_CORRECTIONS_PATH = PREPROCESSING_DIR / "speaker_name_corrections.json"
 PRIVATE_POSTS_DIR = REPO_ROOT / "_private_posts"
+LOGS_DIR = PREPROCESSING_DIR / "logs"
 
 
 @dataclass
@@ -48,8 +50,33 @@ class SummaryResult:
     summary_markdown: str
 
 
+LOGGER = logging.getLogger("summarize_transcript")
+
+
 def load_text_file(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def setup_logging(log_path: Path) -> None:
+    LOGGER.setLevel(logging.INFO)
+    LOGGER.handlers.clear()
+    LOGGER.propagate = False
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    formatter = logging.Formatter(
+        fmt="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setFormatter(formatter)
+
+    LOGGER.addHandler(stream_handler)
+    LOGGER.addHandler(file_handler)
+    LOGGER.info("Logging to %s", log_path)
 
 
 @lru_cache(maxsize=None)
@@ -75,6 +102,7 @@ def load_speaker_name_corrections() -> dict[str, str]:
 
 
 def load_transcript_segments(path: Path) -> list[TranscriptSegment]:
+    LOGGER.info("Loading transcript segments from %s", path)
     segments: list[TranscriptSegment] = []
     with path.open(encoding="utf-8") as handle:
         for line_number, raw_line in enumerate(handle, start=1):
@@ -100,6 +128,7 @@ def load_transcript_segments(path: Path) -> list[TranscriptSegment]:
                     dominant_speaker=item.get("dominant_speaker"),
                 )
             )
+    LOGGER.info("Loaded %s transcript segments", len(segments))
     return segments
 
 
@@ -210,6 +239,12 @@ def render_transcript_with_speaker_names(
 
 
 def call_llm(model: str, system_prompt: str, user_prompt: str) -> str:
+    LOGGER.info(
+        "Calling LLM model=%s system_chars=%s user_chars=%s",
+        model,
+        len(system_prompt),
+        len(user_prompt),
+    )
     try:
         from litellm import completion
     except ImportError as exc:
@@ -226,6 +261,7 @@ def call_llm(model: str, system_prompt: str, user_prompt: str) -> str:
         ],
         temperature=0.2,
     )
+    LOGGER.info("Received LLM response from model=%s", model)
     message = response.choices[0].message
     content = getattr(message, "content", None)
     if isinstance(content, str):
@@ -328,6 +364,7 @@ def summarize_with_speaker_mapping(
     source_name: str,
 ) -> tuple[dict[str, str], str]:
     speaker_list = ", ".join(speaker_ids)
+    LOGGER.info("Preparing one-pass summary for %s speaker IDs", len(speaker_ids))
     system_prompt = load_prompt("meeting_summary_system.txt")
     user_prompt = load_prompt("meeting_summary_user.txt").format(
         source_name=source_name,
@@ -336,6 +373,7 @@ def summarize_with_speaker_mapping(
     )
     raw_response = call_llm(model, system_prompt, user_prompt)
     parsed = extract_json_object(raw_response)
+    LOGGER.info("Parsed structured LLM response")
 
     raw_speaker_map = parsed.get("speaker_map", {})
     if not isinstance(raw_speaker_map, dict):
@@ -349,6 +387,7 @@ def summarize_with_speaker_mapping(
             continue
         guessed_name = correct_speaker_name(value)
         result[speaker_id] = guessed_name or speaker_id
+    LOGGER.info("Resolved speaker map: %s", result)
     summary_markdown = parsed.get("summary_markdown", "")
     if not isinstance(summary_markdown, str) or not summary_markdown.strip():
         raise ValueError("Expected non-empty string 'summary_markdown' in LLM response")
@@ -384,6 +423,7 @@ def summarize_meeting_transcript(
         source_name=path.name,
     )
     rendered_transcript = render_transcript_with_speaker_names(segments, speaker_name_map)
+    LOGGER.info("Rendered transcript with speaker names")
     return SummaryResult(
         speaker_name_map=speaker_name_map,
         rendered_transcript=rendered_transcript,
@@ -394,6 +434,11 @@ def summarize_meeting_transcript(
 def default_output_path(input_path: Path) -> Path:
     date_value, title = derive_post_metadata(input_path)
     return PRIVATE_POSTS_DIR / f"{date_value:%Y-%m-%d}-{slugify(title)}.md"
+
+
+def default_log_path(input_path: Path) -> Path:
+    date_value, title = derive_post_metadata(input_path)
+    return LOGS_DIR / f"{date_value:%Y-%m-%d}-{slugify(title)}.log"
 
 
 def derive_post_metadata(input_path: Path) -> tuple[datetime, str]:
@@ -498,6 +543,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional markdown output path. Defaults next to the input file.",
     )
     parser.add_argument(
+        "--log-path",
+        type=Path,
+        help="Optional log file path. Defaults under preprocessing/logs/.",
+    )
+    parser.add_argument(
         "--stdout",
         action="store_true",
         help="Print the summary instead of writing a file",
@@ -507,18 +557,23 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    log_path = (args.log_path or default_log_path(args.transcript)).expanduser()
+    setup_logging(log_path)
+    LOGGER.info("Starting summarization for %s", args.transcript)
     result = summarize_meeting_transcript(
         transcript_path=args.transcript,
         model=args.model,
     )
 
     if args.stdout:
+        LOGGER.info("Printing summary to stdout")
         print(result.summary_markdown)
         return 0
 
     output_path = (args.output or default_output_path(args.transcript)).expanduser()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(compose_post_markdown(args.transcript, result), encoding="utf-8")
+    LOGGER.info("Wrote private post to %s", output_path)
     print(f"Wrote post to {output_path}")
     return 0
 
