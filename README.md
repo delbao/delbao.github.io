@@ -119,7 +119,7 @@ pip install -r preprocessing/requirements.txt
 Usage:
 
 ```bash
-python preprocessing/summarize_transcript.py \
+python preprocessing/transcript_pipeline.py \
   "/Users/dbao/Movies/AI Platform - Sprint Planning - 2026-02-23 at 10.32.29 AM.webm.smart.diarization.jsonl" \
   --model "openai/gpt-4o"
 ```

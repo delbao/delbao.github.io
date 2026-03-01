@@ -16,4 +16,4 @@ serve: prepare-media
 
 summarize-transcript:
 	test -n "$(TRANSCRIPT)"
-	$(PYTHON) preprocessing/summarize_transcript.py "$(TRANSCRIPT)" --model "$(MODEL)"
+	$(PYTHON) preprocessing/transcript_pipeline.py "$(TRANSCRIPT)" --model "$(MODEL)"
