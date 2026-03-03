@@ -37,6 +37,10 @@ def load_prompt(name: str) -> str:
     return (PROMPTS_DIR / name).read_text(encoding="utf-8")
 
 
+def assemble_prompt(*names: str) -> str:
+    return "\n\n".join(load_prompt(name).strip() for name in names if name).strip()
+
+
 @lru_cache(maxsize=1)
 def load_speaker_name_corrections() -> dict[str, str]:
     from common.text import TextNormalizer

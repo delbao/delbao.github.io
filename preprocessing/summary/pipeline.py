@@ -8,6 +8,7 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 from .config import (
     CALENDAR_EARLY_START_GRACE,
@@ -27,11 +28,12 @@ from .config import (
     LOGS_DIR,
     PHONETIC_FUZZY_NAME_THRESHOLD,
     PRIVATE_POSTS_DIR,
+    assemble_prompt,
     load_prompt,
     load_speaker_name_corrections,
 )
 from common.llm import LLMClient
-from .models import CalendarEvent, PostContext, RecordingMetadata, SummaryResult, TranscriptDocument, TranscriptSegment
+from .models import CalendarEvent, MeetingContext, PostContext, RecordingMetadata, SummaryResult, TranscriptDocument, TranscriptSegment
 from common.text import TextNormalizer
 from .text import TranscriptRenderer
 
@@ -131,14 +133,31 @@ class SpeakerNameService:
 
         return cleaned
 
-    def resolve_names(self, transcript_text: str, speaker_ids: list[str], source_name: str) -> tuple[dict[str, str], str]:
+    def summarize(
+        self,
+        transcript_text: str,
+        speaker_ids: list[str],
+        source_name: str,
+        meeting_context: MeetingContext,
+    ) -> tuple[dict[str, str], str, int, dict[str, object]]:
         speaker_list = ", ".join(speaker_ids)
         LOGGER.info("Preparing one-pass summary for %s speaker IDs", len(speaker_ids))
-        system_prompt = load_prompt("meeting_summary_system.txt")
-        user_prompt = load_prompt("meeting_summary_user.txt").format(
+        system_prompt = assemble_prompt(
+            "meeting_summary_system.txt",
+            "meeting_summary_system_metadata.txt",
+        )
+        user_prompt = assemble_prompt(
+            "meeting_summary_user.txt",
+            "meeting_summary_user_metadata.txt",
+        ).format(
             source_name=source_name,
             speaker_list=speaker_list,
             transcript_text=transcript_text,
+            meeting_context_json=json.dumps(
+                self.serialize_meeting_context(meeting_context),
+                ensure_ascii=False,
+                indent=2,
+            ),
         )
 
         parsed: dict[str, object] | None = None
@@ -183,7 +202,63 @@ class SpeakerNameService:
         summary_markdown = parsed.get("summary_markdown", "")
         if not isinstance(summary_markdown, str) or not summary_markdown.strip():
             raise ValueError("Expected non-empty string 'summary_markdown' in LLM response")
-        return resolved_map, self.postprocess_summary(summary_markdown.strip(), resolved_map)
+        selected_event_index = parsed.get("selected_event_index", 0)
+        if not isinstance(selected_event_index, int):
+            raise ValueError("Expected integer 'selected_event_index' in LLM response")
+        meeting_metadata = self.normalize_meeting_metadata(parsed.get("meeting_metadata", {}))
+        return (
+            resolved_map,
+            self.postprocess_summary(summary_markdown.strip(), resolved_map),
+            selected_event_index,
+            meeting_metadata,
+        )
+
+    @staticmethod
+    def serialize_meeting_context(meeting_context: MeetingContext) -> dict[str, object]:
+        return {
+            "fallback_title": meeting_context.fallback_title,
+            "fallback_source": meeting_context.fallback_source,
+            "recording_started_at": meeting_context.recording_started_at.isoformat(),
+            "recording_ended_at": meeting_context.recording_ended_at.isoformat(),
+            "candidate_events": [
+                {
+                    "index": index,
+                    "title": event.summary,
+                    "source": CalendarEventService.calendar_source_label(event.calendar_name),
+                    "calendar_name": event.calendar_name,
+                    "start_at": event.start.isoformat(),
+                    "end_at": event.end.isoformat(),
+                    "attendees": event.attendees,
+                }
+                for index, event in enumerate(meeting_context.candidate_events, start=1)
+            ],
+        }
+
+    @staticmethod
+    def normalize_meeting_metadata(raw_value: object) -> dict[str, object]:
+        if not isinstance(raw_value, dict):
+            return {"description": None, "links": [], "attendees": []}
+
+        description = raw_value.get("description")
+        raw_links = raw_value.get("links", [])
+        raw_attendees = raw_value.get("attendees", [])
+
+        links: list[dict[str, str]] = []
+        if isinstance(raw_links, list):
+            for item in raw_links:
+                if not isinstance(item, dict):
+                    continue
+                label = item.get("label")
+                url = item.get("url")
+                if isinstance(label, str) and isinstance(url, str) and label.strip() and url.strip():
+                    links.append({"label": label.strip(), "url": url.strip()})
+
+        attendees = [item.strip() for item in raw_attendees if isinstance(item, str) and item.strip()] if isinstance(raw_attendees, list) else []
+        return {
+            "description": description.strip() if isinstance(description, str) and description.strip() else None,
+            "links": links,
+            "attendees": attendees,
+        }
 
     @staticmethod
     def postprocess_summary(summary_markdown: str, speaker_name_map: dict[str, str]) -> str:
@@ -220,11 +295,19 @@ class CalendarEventService:
     def __init__(self, llm_client: LLMClient) -> None:
         self.llm_client = llm_client
 
-    def resolve_post_context(self, document: TranscriptDocument, transcript_text: str) -> PostContext:
+    def build_meeting_context(self, document: TranscriptDocument) -> MeetingContext:
         metadata = FileNamingService.derive_recording_metadata(document.path)
         if metadata.title_hint != document.path.stem:
             LOGGER.info("Using filename-derived title %s", metadata.title_hint)
-            return PostContext(title=metadata.title_hint, source=DEFAULT_POST_SOURCE)
+            recording_start = metadata.started_at
+            recording_end = recording_start + timedelta(seconds=max(document.duration_seconds, 0.0))
+            return MeetingContext(
+                fallback_title=metadata.title_hint,
+                fallback_source=DEFAULT_POST_SOURCE,
+                candidate_events=[],
+                recording_started_at=recording_start,
+                recording_ended_at=recording_end,
+            )
 
         recording_start = metadata.started_at
         recording_end = recording_start + timedelta(seconds=max(document.duration_seconds, 0.0))
@@ -236,26 +319,28 @@ class CalendarEventService:
             calendar_events = self.fetch_events(query_start, query_end)
         except RuntimeError as exc:
             LOGGER.warning("Calendar lookup failed; falling back to filename title: %s", exc)
-            return PostContext(title=metadata.title_hint, source=DEFAULT_POST_SOURCE)
+            return MeetingContext(
+                fallback_title=metadata.title_hint,
+                fallback_source=DEFAULT_POST_SOURCE,
+                candidate_events=[],
+                recording_started_at=recording_start,
+                recording_ended_at=recording_end,
+            )
 
         matched_events = self.match_events(calendar_events, recording_start, recording_end)
-        if len(matched_events) == 1:
-            matched_event = matched_events[0]
-            LOGGER.info("Resolved title from single calendar event: %s", matched_event.summary)
-            return PostContext(
-                title=matched_event.summary,
-                source=self.calendar_source_label(matched_event.calendar_name),
-            )
-
-        chosen_event = self.choose_event_with_llm(transcript_text, matched_events)
-        if chosen_event:
-            return PostContext(
-                title=chosen_event.summary,
-                source=self.calendar_source_label(chosen_event.calendar_name),
-            )
-
-        LOGGER.info("No calendar title match found; falling back to filename title")
-        return PostContext(title=metadata.title_hint, source=DEFAULT_POST_SOURCE)
+        fallback_title = matched_events[0].summary if len(matched_events) == 1 else metadata.title_hint
+        fallback_source = (
+            self.calendar_source_label(matched_events[0].calendar_name)
+            if len(matched_events) == 1
+            else DEFAULT_POST_SOURCE
+        )
+        return MeetingContext(
+            fallback_title=fallback_title,
+            fallback_source=fallback_source,
+            candidate_events=matched_events,
+            recording_started_at=recording_start,
+            recording_ended_at=recording_end,
+        )
 
     def fetch_events(self, window_start: datetime, window_end: datetime) -> list[CalendarEvent]:
         script = f'''
@@ -289,6 +374,7 @@ set allowedCalendars to {{"Vanta", "个人"}}
 {self.build_applescript_date("windowEnd", window_end)}
 set fieldSeparator to character id 31
 set rowSeparator to character id 30
+set attendeeSeparator to character id 29
 
 tell application "Calendar"
   set outputRows to {{}}
@@ -301,7 +387,28 @@ tell application "Calendar"
           set endDateValue to end date of e
           set summaryText to summary of e as text
           set summaryText to my sanitizeText(summaryText)
-          set rowText to (name of theCal as text) & fieldSeparator & summaryText & fieldSeparator & my isoStringForDate(start date of e) & fieldSeparator & my isoStringForDate(endDateValue)
+          set attendeeTexts to {{}}
+          try
+            repeat with attendeeItem in (attendees of e)
+              set attendeeText to ""
+              try
+                set attendeeText to display name of attendeeItem as text
+              end try
+              if attendeeText is "" then
+                try
+                  set attendeeText to email of attendeeItem as text
+                end try
+              end if
+              if attendeeText is not "" then
+                set attendeeText to my sanitizeText(attendeeText)
+                copy attendeeText to end of attendeeTexts
+              end if
+            end repeat
+          end try
+          set AppleScript's text item delimiters to attendeeSeparator
+          set attendeeTextValue to attendeeTexts as text
+          set AppleScript's text item delimiters to ""
+          set rowText to (name of theCal as text) & fieldSeparator & summaryText & fieldSeparator & my isoStringForDate(start date of e) & fieldSeparator & my isoStringForDate(endDateValue) & fieldSeparator & attendeeTextValue
           copy rowText to end of outputRows
         end if
       end repeat
@@ -324,24 +431,30 @@ return joinedRows
             if not row.strip():
                 continue
             parts = row.split(chr(31))
-            if len(parts) != 4:
+            if len(parts) != 5:
                 continue
-            calendar_name, summary, start_text, end_text = parts
+            calendar_name, summary, start_text, end_text, attendees_text = parts
             summary = summary.strip()
             if not summary:
                 continue
+            attendees = [
+                item.strip()
+                for item in attendees_text.split(chr(29))
+                if item.strip()
+            ]
             events.append(
                 CalendarEvent(
                     calendar_name=calendar_name.strip(),
                     summary=summary,
                     start=datetime.fromisoformat(start_text),
                     end=datetime.fromisoformat(end_text),
+                    attendees=attendees,
                 )
             )
 
         deduped_events = list(
             {
-                (event.calendar_name, event.summary, event.start, event.end): event
+                (event.calendar_name, event.summary, event.start, event.end, tuple(event.attendees)): event
                 for event in events
             }.values()
         )
@@ -398,33 +511,6 @@ return joinedRows
         )
         return duration_tied_events
 
-    def choose_event_with_llm(self, transcript_text: str, candidate_events: list[CalendarEvent]) -> CalendarEvent | None:
-        if len(candidate_events) <= 1:
-            return candidate_events[0] if candidate_events else None
-
-        system_prompt = (
-            "You resolve which calendar event title best matches a meeting transcript. "
-            "Return only a JSON object with one top-level key: selected_index. "
-            "Choose the 1-based candidate index that best matches the transcript context. "
-            "If the transcript is too ambiguous, return 0."
-        )
-        user_prompt = (
-            "Pick the best matching calendar event for this transcript.\n\n"
-            f"Candidate events:\n{self.format_event_options(candidate_events)}\n\n"
-            "Transcript excerpt:\n"
-            f"{transcript_text[:CALENDAR_TRANSCRIPT_EXCERPT_CHARS]}"
-        )
-        parsed = self.llm_client.complete_json(system_prompt, user_prompt)
-        selected_index = parsed.get("selected_index")
-        if not isinstance(selected_index, int):
-            raise ValueError("Expected integer selected_index from calendar disambiguation LLM")
-        if 1 <= selected_index <= len(candidate_events):
-            selected = candidate_events[selected_index - 1]
-            LOGGER.info("LLM selected calendar event %s", selected.summary)
-            return selected
-        LOGGER.info("LLM did not select a calendar event")
-        return None
-
     @staticmethod
     def build_applescript_date(variable_name: str, value: datetime) -> str:
         return "\n".join(
@@ -454,17 +540,6 @@ return joinedRows
         if calendar_name == "Vanta":
             return "Vanta"
         return "Personal"
-
-    @staticmethod
-    def format_event_options(events: list[CalendarEvent]) -> str:
-        lines: list[str] = []
-        for index, event in enumerate(events, start=1):
-            lines.append(
-                f"{index}. {event.summary} | {event.calendar_name} | "
-                f"{event.start:%Y-%m-%d %H:%M} - {event.end:%H:%M}"
-            )
-        return "\n".join(lines)
-
 
 class FileNamingService:
     @staticmethod
@@ -601,6 +676,8 @@ class PostComposer:
             f'title: {json.dumps(result.post_title)}',
             f'date: "{metadata.started_at:%Y-%m-%d %H:%M:%S}"',
             f'source: {json.dumps(result.post_source)}',
+            f'video_url: {json.dumps(result.video_url)}',
+            f"meeting: {json.dumps(result.meeting_metadata, ensure_ascii=False)}",
             "comments: false",
             "raw_llm_input: |",
             TranscriptRenderer.indent_block(result.rendered_transcript),
@@ -627,13 +704,21 @@ class TranscriptSummarizer:
             raise ValueError(f"No transcript text found in {document.path}")
 
         unlabeled_transcript = TranscriptRenderer.render(document.segments)
-        speaker_name_map, summary_markdown = self.speaker_names.resolve_names(
+        meeting_context = self.calendar.build_meeting_context(document)
+        speaker_name_map, summary_markdown, selected_event_index, meeting_metadata = self.speaker_names.summarize(
             transcript_text=unlabeled_transcript,
             speaker_ids=document.speaker_ids,
             source_name=document.source_name,
+            meeting_context=meeting_context,
         )
         rendered_transcript = TranscriptRenderer.render(document.segments, speaker_name_map)
-        post_context = self.calendar.resolve_post_context(document, rendered_transcript)
+        post_context = self.select_post_context(meeting_context, selected_event_index)
+        selected_event = self.select_event(meeting_context, selected_event_index)
+        finalized_meeting_metadata = {
+            "description": meeting_metadata.get("description"),
+            "links": meeting_metadata.get("links", []),
+            "attendees": selected_event.attendees if selected_event else [],
+        }
         LOGGER.info("Rendered transcript with speaker names")
         return SummaryResult(
             speaker_name_map=speaker_name_map,
@@ -641,18 +726,58 @@ class TranscriptSummarizer:
             summary_markdown=summary_markdown,
             post_title=post_context.title,
             post_source=post_context.source,
+            meeting_metadata=finalized_meeting_metadata,
+            video_url=self.build_drive_search_url(post_context.title),
         )
 
-    def resolve_speaker_names(self, transcript_text: str, speaker_ids: list[str], source_name: str) -> tuple[dict[str, str], str]:
-        return self.speaker_names.resolve_names(transcript_text, speaker_ids, source_name)
+    def resolve_speaker_names(
+        self,
+        transcript_text: str,
+        speaker_ids: list[str],
+        source_name: str,
+        meeting_context: MeetingContext | None = None,
+    ) -> tuple[dict[str, str], str, int, dict[str, object]]:
+        meeting_context = meeting_context or MeetingContext(
+            fallback_title="",
+            fallback_source=DEFAULT_POST_SOURCE,
+            candidate_events=[],
+            recording_started_at=datetime.min,
+            recording_ended_at=datetime.min,
+        )
+        return self.speaker_names.summarize(transcript_text, speaker_ids, source_name, meeting_context)
 
     def correct_speaker_name(self, name: str) -> str:
         return self.speaker_names.correct_name(name)
 
     def resolve_post_context(self, transcript_path: str | Path, rendered_transcript: str | None = None) -> PostContext:
         document = TranscriptIO.load(transcript_path)
-        transcript_text = rendered_transcript or TranscriptRenderer.render(document.segments)
-        return self.calendar.resolve_post_context(document, transcript_text)
+        _ = rendered_transcript or TranscriptRenderer.render(document.segments)
+        meeting_context = self.calendar.build_meeting_context(document)
+        return self.select_post_context(meeting_context, 1 if len(meeting_context.candidate_events) == 1 else 0)
 
     def rename_recording_files(self, transcript_path: str | Path, post_title: str) -> Path:
         return FileNamingService.rename_recording_files(Path(transcript_path).expanduser(), post_title)
+
+    def select_post_context(self, meeting_context: MeetingContext, selected_event_index: int) -> PostContext:
+        if 1 <= selected_event_index <= len(meeting_context.candidate_events):
+            event = meeting_context.candidate_events[selected_event_index - 1]
+            return PostContext(
+                title=event.summary,
+                source=CalendarEventService.calendar_source_label(event.calendar_name),
+            )
+        return PostContext(
+            title=meeting_context.fallback_title,
+            source=meeting_context.fallback_source,
+        )
+
+    @staticmethod
+    def select_event(meeting_context: MeetingContext, selected_event_index: int) -> CalendarEvent | None:
+        if 1 <= selected_event_index <= len(meeting_context.candidate_events):
+            return meeting_context.candidate_events[selected_event_index - 1]
+        if len(meeting_context.candidate_events) == 1:
+            return meeting_context.candidate_events[0]
+        return None
+
+    @staticmethod
+    def build_drive_search_url(post_title: str) -> str:
+        return f"https://drive.google.com/drive/search?q={quote(post_title, safe='')}"

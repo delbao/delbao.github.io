@@ -30,6 +30,8 @@ class SummaryResult:
     summary_markdown: str
     post_title: str
     post_source: str
+    meeting_metadata: dict[str, object]
+    video_url: str
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,7 @@ class CalendarEvent:
     summary: str
     start: datetime
     end: datetime
+    attendees: list[str]
 
 
 @dataclass(frozen=True)
@@ -76,3 +79,12 @@ class TranscriptDocument:
             seen.add(speaker_id)
             speaker_ids.append(speaker_id)
         return speaker_ids
+
+
+@dataclass(frozen=True)
+class MeetingContext:
+    fallback_title: str
+    fallback_source: str
+    candidate_events: list[CalendarEvent]
+    recording_started_at: datetime
+    recording_ended_at: datetime

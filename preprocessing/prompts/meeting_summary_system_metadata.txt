@@ -1,0 +1,7 @@
+Treat provided meeting metadata as candidate context, not guaranteed truth.
+
+Rules for metadata:
+- Prefer deterministic upstream metadata unless contradicted by the transcript.
+- Do not invent links or descriptions not supported by transcript or provided metadata.
+- If a field is uncertain, return null, an empty string, or an empty list instead of guessing.
+- If multiple candidate calendar events are provided, choose the best matching one using transcript evidence.
