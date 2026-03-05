@@ -140,7 +140,7 @@ class SpeakerNameService:
         speaker_ids: list[str],
         source_name: str,
         meeting_context: MeetingContext,
-    ) -> tuple[dict[str, str], str, int, dict[str, object]]:
+    ) -> tuple[dict[str, str], str, int]:
         speaker_list = ", ".join(speaker_ids)
         LOGGER.info("Preparing one-pass summary for %s speaker IDs", len(speaker_ids))
         system_prompt = assemble_prompt(
@@ -206,12 +206,10 @@ class SpeakerNameService:
         selected_event_index = parsed.get("selected_event_index", 0)
         if not isinstance(selected_event_index, int):
             raise ValueError("Expected integer 'selected_event_index' in LLM response")
-        meeting_metadata = self.normalize_meeting_metadata(parsed.get("meeting_metadata", {}))
         return (
             resolved_map,
             self.postprocess_summary(summary_markdown.strip(), resolved_map),
             selected_event_index,
-            meeting_metadata,
         )
 
     @staticmethod
@@ -229,36 +227,12 @@ class SpeakerNameService:
                     "calendar_name": event.calendar_name,
                     "start_at": event.start.isoformat(),
                     "end_at": event.end.isoformat(),
+                    "description": event.description,
+                    "links": event.links,
                     "attendees": event.attendees,
                 }
                 for index, event in enumerate(meeting_context.candidate_events, start=1)
             ],
-        }
-
-    @staticmethod
-    def normalize_meeting_metadata(raw_value: object) -> dict[str, object]:
-        if not isinstance(raw_value, dict):
-            return {"description": None, "links": [], "attendees": []}
-
-        description = raw_value.get("description")
-        raw_links = raw_value.get("links", [])
-        raw_attendees = raw_value.get("attendees", [])
-
-        links: list[dict[str, str]] = []
-        if isinstance(raw_links, list):
-            for item in raw_links:
-                if not isinstance(item, dict):
-                    continue
-                label = item.get("label")
-                url = item.get("url")
-                if isinstance(label, str) and isinstance(url, str) and label.strip() and url.strip():
-                    links.append({"label": label.strip(), "url": url.strip()})
-
-        attendees = [item.strip() for item in raw_attendees if isinstance(item, str) and item.strip()] if isinstance(raw_attendees, list) else []
-        return {
-            "description": description.strip() if isinstance(description, str) and description.strip() else None,
-            "links": links,
-            "attendees": attendees,
         }
 
     @staticmethod
@@ -298,18 +272,6 @@ class CalendarEventService:
 
     def build_meeting_context(self, document: TranscriptDocument) -> MeetingContext:
         metadata = FileNamingService.derive_recording_metadata(document.path)
-        if metadata.title_hint != document.path.stem:
-            LOGGER.info("Using filename-derived title %s", metadata.title_hint)
-            recording_start = metadata.started_at
-            recording_end = recording_start + timedelta(seconds=max(document.duration_seconds, 0.0))
-            return MeetingContext(
-                fallback_title=metadata.title_hint,
-                fallback_source=DEFAULT_POST_SOURCE,
-                candidate_events=[],
-                recording_started_at=recording_start,
-                recording_ended_at=recording_end,
-            )
-
         recording_start = metadata.started_at
         recording_end = recording_start + timedelta(seconds=max(document.duration_seconds, 0.0))
         query_start = recording_start - CALENDAR_QUERY_PADDING
@@ -388,6 +350,16 @@ tell application "Calendar"
           set endDateValue to end date of e
           set summaryText to summary of e as text
           set summaryText to my sanitizeText(summaryText)
+          set descriptionText to ""
+          try
+            set descriptionText to description of e as text
+          end try
+          set descriptionText to my sanitizeText(descriptionText)
+          set urlText to ""
+          try
+            set urlText to url of e as text
+          end try
+          set urlText to my sanitizeText(urlText)
           set attendeeTexts to {{}}
           try
             repeat with attendeeItem in (attendees of e)
@@ -409,7 +381,7 @@ tell application "Calendar"
           set AppleScript's text item delimiters to attendeeSeparator
           set attendeeTextValue to attendeeTexts as text
           set AppleScript's text item delimiters to ""
-          set rowText to (name of theCal as text) & fieldSeparator & summaryText & fieldSeparator & my isoStringForDate(start date of e) & fieldSeparator & my isoStringForDate(endDateValue) & fieldSeparator & attendeeTextValue
+          set rowText to (name of theCal as text) & fieldSeparator & summaryText & fieldSeparator & my isoStringForDate(start date of e) & fieldSeparator & my isoStringForDate(endDateValue) & fieldSeparator & attendeeTextValue & fieldSeparator & descriptionText & fieldSeparator & urlText
           copy rowText to end of outputRows
         end if
       end repeat
@@ -432,9 +404,9 @@ return joinedRows
             if not row.strip():
                 continue
             parts = row.split(chr(31))
-            if len(parts) != 5:
+            if len(parts) != 7:
                 continue
-            calendar_name, summary, start_text, end_text, attendees_text = parts
+            calendar_name, summary, start_text, end_text, attendees_text, description_text, event_url = parts
             summary = summary.strip()
             if not summary:
                 continue
@@ -443,19 +415,31 @@ return joinedRows
                 for item in attendees_text.split(chr(29))
                 if item.strip()
             ]
+            description = description_text.strip() or None
+            links = self.extract_invite_links(description, event_url.strip())
             events.append(
                 CalendarEvent(
                     calendar_name=calendar_name.strip(),
                     summary=summary,
                     start=datetime.fromisoformat(start_text),
                     end=datetime.fromisoformat(end_text),
+                    description=description,
+                    links=links,
                     attendees=attendees,
                 )
             )
 
         deduped_events = list(
             {
-                (event.calendar_name, event.summary, event.start, event.end, tuple(event.attendees)): event
+                (
+                    event.calendar_name,
+                    event.summary,
+                    event.start,
+                    event.end,
+                    event.description,
+                    tuple((link["label"], link["url"]) for link in event.links),
+                    tuple(event.attendees),
+                ): event
                 for event in events
             }.values()
         )
@@ -538,11 +522,43 @@ return joinedRows
 
     @staticmethod
     def calendar_source_label(calendar_name: str) -> str:
-        if calendar_name == "Vanta":
+        normalized = calendar_name.strip().lower()
+        if normalized == "vanta":
             return "Vanta"
-        return "Personal"
+        if normalized in {"个人", "personal"}:
+            return "Personal"
+        return calendar_name.strip() or DEFAULT_POST_SOURCE
+
+    @staticmethod
+    def extract_invite_links(description: str | None, event_url: str | None) -> list[dict[str, str]]:
+        links: list[dict[str, str]] = []
+        seen: set[str] = set()
+
+        def add_link(label: str, url: str) -> None:
+            cleaned = url.strip()
+            if not cleaned or cleaned in seen:
+                return
+            seen.add(cleaned)
+            links.append({"label": label, "url": cleaned})
+
+        if event_url:
+            add_link("Event URL", event_url)
+        if description:
+            for index, match in enumerate(re.finditer(r"https?://[^\s)\]>\"']+", description), start=1):
+                add_link(f"Link {index}", match.group(0))
+        return links
 
 class FileNamingService:
+    @staticmethod
+    def strip_transcript_suffixes(title: str) -> str:
+        cleaned = re.sub(
+            r"(\.(mp4|webm|mov))?\.smart(?:\.diarization)?\.jsonl$",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        ).strip(" -_.")
+        return cleaned
+
     @staticmethod
     def derive_recording_metadata(input_path: Path) -> RecordingMetadata:
         normalized_name = input_path.name.replace("\u202f", " ").replace("\xa0", " ")
@@ -585,14 +601,9 @@ class FileNamingService:
                 started_at = datetime.fromtimestamp(input_path.stat().st_mtime)
                 title_source = normalized_name
 
-        title_hint = re.sub(
-            r"(\.(mp4|webm|mov))?\.smart\.diarization\.jsonl$",
-            "",
-            title_source,
-            flags=re.IGNORECASE,
-        ).strip(" -_.")
+        title_hint = FileNamingService.strip_transcript_suffixes(title_source)
         if not title_hint:
-            title_hint = input_path.stem
+            title_hint = FileNamingService.strip_transcript_suffixes(input_path.stem) or input_path.stem
         return RecordingMetadata(started_at=started_at, title_hint=title_hint)
 
     @staticmethod
@@ -714,18 +725,20 @@ class TranscriptSummarizer:
 
         unlabeled_transcript = TranscriptRenderer.render(document.segments)
         meeting_context = self.calendar.build_meeting_context(document)
-        speaker_name_map, summary_markdown, selected_event_index, meeting_metadata = self.speaker_names.summarize(
+        speaker_name_map, summary_markdown, selected_event_index = self.speaker_names.summarize(
             transcript_text=unlabeled_transcript,
             speaker_ids=document.speaker_ids,
             source_name=document.source_name,
             meeting_context=meeting_context,
         )
+        if selected_event_index == 0 and len(meeting_context.candidate_events) == 1:
+            selected_event_index = 1
         rendered_transcript = TranscriptRenderer.render(document.segments, speaker_name_map)
         post_context = self.select_post_context(meeting_context, selected_event_index)
         selected_event = self.select_event(meeting_context, selected_event_index)
         finalized_meeting_metadata = {
-            "description": meeting_metadata.get("description"),
-            "links": meeting_metadata.get("links", []),
+            "description": selected_event.description if selected_event else None,
+            "links": selected_event.links if selected_event else [],
             "attendees": selected_event.attendees if selected_event else [],
         }
         LOGGER.info("Rendered transcript with speaker names")
@@ -745,7 +758,7 @@ class TranscriptSummarizer:
         speaker_ids: list[str],
         source_name: str,
         meeting_context: MeetingContext | None = None,
-    ) -> tuple[dict[str, str], str, int, dict[str, object]]:
+    ) -> tuple[dict[str, str], str, int]:
         meeting_context = meeting_context or MeetingContext(
             fallback_title="",
             fallback_source=DEFAULT_POST_SOURCE,
@@ -770,6 +783,12 @@ class TranscriptSummarizer:
     def select_post_context(self, meeting_context: MeetingContext, selected_event_index: int) -> PostContext:
         if 1 <= selected_event_index <= len(meeting_context.candidate_events):
             event = meeting_context.candidate_events[selected_event_index - 1]
+            return PostContext(
+                title=event.summary,
+                source=CalendarEventService.calendar_source_label(event.calendar_name),
+            )
+        if len(meeting_context.candidate_events) == 1:
+            event = meeting_context.candidate_events[0]
             return PostContext(
                 title=event.summary,
                 source=CalendarEventService.calendar_source_label(event.calendar_name),

@@ -27,6 +27,35 @@
   color: #9a9a9a;
 }
 
+.meeting-metadata,
+.raw-llm-input {
+  margin: 1rem 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 0.35rem;
+  background: #fafafa;
+}
+
+.meeting-metadata summary,
+.raw-llm-input summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.meeting-metadata-body {
+  margin-top: 0.75rem;
+}
+
+.meeting-metadata-body h3 {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.meeting-metadata-body p,
+.meeting-metadata-body ul {
+  margin: 0.45rem 0;
+}
+
 
 // Related posts
 .related {

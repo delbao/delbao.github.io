@@ -4,10 +4,6 @@ Return only a JSON object with exactly these top-level keys:
 - "speaker_map": object mapping each speaker ID to a display name
 - "summary_markdown": string containing the final markdown summary
 - "selected_event_index": integer index of the chosen candidate event, or 0 if none should be selected
-- "meeting_metadata": object with exactly these keys:
-  - "description": string or null
-  - "links": array of objects with keys "label" and "url"
-  - "attendees": array of strings
 
 The summary markdown must contain exactly these sections:
 # Meeting Summary
@@ -27,7 +23,6 @@ Rules:
 - Include short direct quotes only when especially useful.
 - Treat repeated filler or transcription noise as low-signal unless it affects meaning.
 - Do not include explanations, markdown fences, or extra keys outside the JSON object.
-- For "meeting_metadata.attendees", include all attendees from the selected event when one is selected; otherwise return an empty array.
 
 Speaker IDs:
 {speaker_list}

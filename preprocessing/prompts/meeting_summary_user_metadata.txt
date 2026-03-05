@@ -4,5 +4,4 @@ Candidate Meeting Metadata:
 Metadata rules:
 - If only one candidate event is clearly correct, return its 1-based index.
 - If no candidate event is trustworthy, return 0.
-- Do not invent links or URLs.
-- Keep descriptions concise and factual.
+- Return only the selected event index decision based on transcript alignment.

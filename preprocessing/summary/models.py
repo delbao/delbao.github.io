@@ -40,6 +40,8 @@ class CalendarEvent:
     summary: str
     start: datetime
     end: datetime
+    description: str | None
+    links: list[dict[str, str]]
     attendees: list[str]
 
 
