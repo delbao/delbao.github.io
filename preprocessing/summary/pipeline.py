@@ -20,6 +20,7 @@ from .config import (
     CALENDAR_START_TIE_WINDOW,
     CALENDAR_TRANSCRIPT_EXCERPT_CHARS,
     DEFAULT_LLM_RETRIES,
+    DEFAULT_FALLBACK_MODEL,
     DEFAULT_LLM_TIMEOUT_SECONDS,
     DEFAULT_MODEL,
     DEFAULT_POST_SOURCE,
@@ -614,13 +615,15 @@ class FileNamingService:
 
     @staticmethod
     def source_media_path_for_transcript(path: Path) -> Path | None:
-        transcript_suffix = ".smart.diarization.jsonl"
-        if not path.name.lower().endswith(transcript_suffix):
-            return None
-        media_name = path.name[: -len(transcript_suffix)]
-        media_path = path.with_name(media_name)
-        if media_path.exists():
-            return media_path
+        suffixes = (".smart.diarization.jsonl", ".smart.jsonl")
+        lower_name = path.name.lower()
+        for transcript_suffix in suffixes:
+            if not lower_name.endswith(transcript_suffix):
+                continue
+            media_name = path.name[: -len(transcript_suffix)]
+            media_path = path.with_name(media_name)
+            if media_path.exists():
+                return media_path
         return None
 
     @staticmethod
@@ -691,10 +694,16 @@ class TranscriptSummarizer:
     def __init__(
         self,
         model: str = DEFAULT_MODEL,
+        fallback_model: str | None = DEFAULT_FALLBACK_MODEL,
         timeout_seconds: float = DEFAULT_LLM_TIMEOUT_SECONDS,
         retries: int = DEFAULT_LLM_RETRIES,
     ) -> None:
-        self.llm_client = LLMClient(model=model, timeout_seconds=timeout_seconds, retries=retries)
+        self.llm_client = LLMClient(
+            model=model,
+            fallback_model=fallback_model,
+            timeout_seconds=timeout_seconds,
+            retries=retries,
+        )
         self.speaker_names = SpeakerNameService(self.llm_client)
         self.calendar = CalendarEventService(self.llm_client)
 

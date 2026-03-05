@@ -10,18 +10,29 @@ LOGGER = logging.getLogger("summarize_transcript")
 
 
 class LLMClient:
-    def __init__(self, model: str, timeout_seconds: float, retries: int) -> None:
+    def __init__(self, model: str, timeout_seconds: float, retries: int, fallback_model: str | None = None) -> None:
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.retries = retries
+        self.fallback_model = fallback_model or None
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, object]:
         return self.extract_json_object(self.complete_text(system_prompt, user_prompt))
 
     def complete_text(self, system_prompt: str, user_prompt: str) -> str:
+        return self._complete_with_model(self.model, system_prompt, user_prompt, allow_fallback=True)
+
+    def _complete_with_model(
+        self,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        allow_fallback: bool,
+    ) -> str:
         LOGGER.info(
             "Calling LLM model=%s system_chars=%s user_chars=%s timeout=%ss retries=%s",
-            self.model,
+            model,
             len(system_prompt),
             len(user_prompt),
             self.timeout_seconds,
@@ -40,7 +51,7 @@ class LLMClient:
             try:
                 LOGGER.info("LLM request attempt %s/%s", attempt, self.retries + 1)
                 response = completion(
-                    model=self.model,
+                    model=model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
@@ -49,12 +60,25 @@ class LLMClient:
                     timeout=self.timeout_seconds,
                     response_format={"type": "json_object"},
                 )
-                LOGGER.info("Received LLM response from model=%s", self.model)
+                LOGGER.info("Received LLM response from model=%s", model)
                 return self.extract_text_content(response.choices[0].message)
             except Exception as exc:
                 last_error = exc
                 LOGGER.warning("LLM request attempt %s failed: %s", attempt, exc)
                 if attempt > self.retries:
+                    if allow_fallback and self.fallback_model and self.fallback_model != model:
+                        LOGGER.warning(
+                            "Primary model %s failed after %s attempt(s). Falling back to %s.",
+                            model,
+                            self.retries + 1,
+                            self.fallback_model,
+                        )
+                        return self._complete_with_model(
+                            self.fallback_model,
+                            system_prompt,
+                            user_prompt,
+                            allow_fallback=False,
+                        )
                     raise
                 sleep_seconds = min(2 ** (attempt - 1), 8)
                 LOGGER.info("Retrying LLM request in %ss", sleep_seconds)

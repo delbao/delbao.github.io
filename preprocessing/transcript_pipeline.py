@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from summary.config import DEFAULT_LLM_RETRIES, DEFAULT_LLM_TIMEOUT_SECONDS, DEFAULT_MODEL, LOGGER
+from summary.config import DEFAULT_FALLBACK_MODEL, DEFAULT_LLM_RETRIES, DEFAULT_LLM_TIMEOUT_SECONDS, DEFAULT_MODEL, LOGGER
 from summary.pipeline import FileNamingService, LoggingManager, PostComposer, TranscriptSummarizer
 
 
@@ -21,6 +21,11 @@ def parse_args() -> argparse.Namespace:
         "--model",
         default=DEFAULT_MODEL,
         help="LiteLLM model string, e.g. gpt-4.1-mini or gemini/gemini-2.0-flash",
+    )
+    parser.add_argument(
+        "--fallback-model",
+        default=DEFAULT_FALLBACK_MODEL,
+        help="Optional fallback LiteLLM model string to try after the primary model fails.",
     )
     parser.add_argument(
         "--timeout-seconds",
@@ -66,6 +71,7 @@ def main() -> int:
 
     summarizer = TranscriptSummarizer(
         model=args.model,
+        fallback_model=args.fallback_model or None,
         timeout_seconds=args.timeout_seconds,
         retries=args.retries,
     )
