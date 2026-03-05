@@ -8,7 +8,7 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from .config import (
     CALENDAR_EARLY_START_GRACE,
@@ -267,6 +267,36 @@ class SpeakerNameService:
 
 
 class CalendarEventService:
+    _TRIVIAL_LINK_HOSTS = {
+        "calendar.google.com",
+        "meet.google.com",
+        "zoom.us",
+        "teams.microsoft.com",
+        "webex.com",
+    }
+    _USEFUL_LINK_HOST_MARKERS = (
+        "docs.google.com",
+        "drive.google.com",
+        "notion.so",
+        "atlassian.net",
+        "confluence",
+        "figma.com",
+        "miro.com",
+        "github.com",
+    )
+    _USEFUL_PATH_MARKERS = (
+        "/document/",
+        "/presentation/",
+        "/spreadsheets/",
+        "/file/d/",
+        "/wiki/",
+        "/slides/",
+        "/deck",
+        "/doc",
+        "/paper",
+    )
+    _USEFUL_FILE_SUFFIXES = (".pdf", ".ppt", ".pptx", ".key", ".doc", ".docx", ".xls", ".xlsx")
+
     def __init__(self, llm_client: LLMClient) -> None:
         self.llm_client = llm_client
 
@@ -538,17 +568,55 @@ return joinedRows
             cleaned = url.strip()
             if not cleaned or cleaned in seen:
                 return
+            if not CalendarEventService.is_useful_attachment_link(cleaned):
+                return
             seen.add(cleaned)
             links.append({"label": label, "url": cleaned})
 
         if event_url:
             add_link("Event URL", event_url)
         if description:
-            for index, match in enumerate(re.finditer(r"https?://[^\s)\]>\"']+", description), start=1):
-                add_link(f"Link {index}", match.group(0))
+            link_index = 1
+            for match in re.finditer(r"https?://[^\s)\]>\"']+", description):
+                before_count = len(links)
+                add_link(f"Link {link_index}", match.group(0))
+                if len(links) > before_count:
+                    link_index += 1
         return links
 
+    @staticmethod
+    def is_useful_attachment_link(url: str) -> bool:
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            return False
+
+        host = (parsed.netloc or "").lower()
+        host = host[4:] if host.startswith("www.") else host
+        path = (parsed.path or "").lower()
+
+        if host in CalendarEventService._TRIVIAL_LINK_HOSTS:
+            return False
+        if host == "calendar.google.com" and "/event" in path:
+            return False
+
+        if host.endswith(CalendarEventService._USEFUL_LINK_HOST_MARKERS):
+            return True
+
+        if path.endswith(CalendarEventService._USEFUL_FILE_SUFFIXES):
+            return True
+
+        for marker in CalendarEventService._USEFUL_PATH_MARKERS:
+            if marker in path:
+                return True
+
+        return False
+
 class FileNamingService:
+    _RECORDING_DATETIME_PATTERN = re.compile(
+        r"(?P<datetime>\d{4}-\d{2}-\d{2}(?:\s+at)?\s+\d{1,2}[-:]\d{2}(?:[-:]\d{2})?)"
+    )
+
     @staticmethod
     def strip_transcript_suffixes(title: str) -> str:
         cleaned = re.sub(
@@ -643,11 +711,15 @@ class FileNamingService:
         transcript_suffix = FileNamingService.transcript_suffix_chain(input_path)
         media_path = FileNamingService.source_media_path_for_transcript(input_path)
         media_suffix = "".join(media_path.suffixes) if media_path else None
+        datetime_suffix = FileNamingService.recording_datetime_suffix(input_path, media_path)
+        base_title = sanitized_title
+        if datetime_suffix and datetime_suffix.lower() not in sanitized_title.lower():
+            base_title = f"{sanitized_title} - {datetime_suffix}"
         existing_paths = {path.resolve() for path in [input_path, media_path] if path is not None and path.exists()}
 
         for attempt in range(1, 101):
             suffix = "" if attempt == 1 else f" ({attempt})"
-            candidate_base = f"{sanitized_title}{suffix}"
+            candidate_base = f"{base_title}{suffix}"
             transcript_target = input_path.with_name(f"{candidate_base}{transcript_suffix}")
             rename_targets: dict[Path, Path] = {input_path: transcript_target}
             if media_path and media_suffix:
@@ -664,6 +736,27 @@ class FileNamingService:
                 return rename_targets
 
         raise RuntimeError(f"Could not find available recording rename target for {input_path}")
+
+    @staticmethod
+    def recording_datetime_suffix(input_path: Path, media_path: Path | None = None) -> str:
+        candidates: list[str] = []
+        if media_path is not None:
+            candidates.append(media_path.stem)
+
+        transcript_name = input_path.name
+        lower_name = transcript_name.lower()
+        for transcript_suffix in (".smart.diarization.jsonl", ".smart.jsonl"):
+            if lower_name.endswith(transcript_suffix):
+                transcript_name = transcript_name[: -len(transcript_suffix)]
+                break
+        transcript_stem = Path(transcript_name).stem if "." in transcript_name else transcript_name
+        candidates.append(transcript_stem)
+
+        for candidate in candidates:
+            match = FileNamingService._RECORDING_DATETIME_PATTERN.search(candidate)
+            if match:
+                return match.group("datetime")
+        return ""
 
     @staticmethod
     def rename_recording_files(input_path: Path, post_title: str) -> Path:
