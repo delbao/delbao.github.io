@@ -296,6 +296,13 @@ class CalendarEventService:
         "/paper",
     )
     _USEFUL_FILE_SUFFIXES = (".pdf", ".ppt", ".pptx", ".key", ".doc", ".docx", ".xls", ".xlsx")
+    _LOW_SIGNAL_TITLE_MARKERS = (
+        "placeholder",
+        "no meeting",
+        "focus",
+        "ooo",
+        "out of office",
+    )
 
     def __init__(self, llm_client: LLMClient) -> None:
         self.llm_client = llm_client
@@ -308,19 +315,28 @@ class CalendarEventService:
         query_end = recording_end + CALENDAR_QUERY_PADDING
         LOGGER.info("Resolving title from Calendar for recording window %s to %s", recording_start, recording_end)
 
-        try:
-            calendar_events = self.fetch_events(query_start, query_end)
-        except RuntimeError as exc:
-            LOGGER.warning("Calendar lookup failed; falling back to filename title: %s", exc)
-            return MeetingContext(
-                fallback_title=metadata.title_hint,
-                fallback_source=DEFAULT_POST_SOURCE,
-                candidate_events=[],
-                recording_started_at=recording_start,
-                recording_ended_at=recording_end,
-            )
+        calendar_events = self.fetch_events(query_start, query_end)
 
         matched_events = self.match_events(calendar_events, recording_start, recording_end)
+        if matched_events and all(self.is_weak_match(event) for event in matched_events):
+            widened_start = recording_start - timedelta(hours=4)
+            widened_end = recording_end + timedelta(hours=4)
+            LOGGER.info(
+                "Initial calendar match was weak; retrying with widened window %s to %s",
+                widened_start,
+                widened_end,
+            )
+            try:
+                widened_events = self.fetch_events(widened_start, widened_end)
+                widened_matched = self.match_events(widened_events, recording_start, recording_end)
+                if widened_matched and any(not self.is_weak_match(event) for event in widened_matched):
+                    LOGGER.info("Using widened-window match with %s events", len(widened_matched))
+                    matched_events = widened_matched
+            except RuntimeError as exc:
+                LOGGER.warning("Widened calendar lookup failed; keeping original weak match: %s", exc)
+        if matched_events and all(self.is_weak_match(event) for event in matched_events):
+            LOGGER.info("All matched events remain weak; falling back to filename-derived title context")
+            matched_events = []
         fallback_title = matched_events[0].summary if len(matched_events) == 1 else metadata.title_hint
         fallback_source = (
             self.calendar_source_label(matched_events[0].calendar_name)
@@ -336,6 +352,82 @@ class CalendarEventService:
         )
 
     def fetch_events(self, window_start: datetime, window_end: datetime) -> list[CalendarEvent]:
+        return self.fetch_events_eventkit(window_start, window_end)
+
+    def fetch_events_eventkit(self, window_start: datetime, window_end: datetime) -> list[CalendarEvent]:
+        script_path = Path(__file__).resolve().parents[1] / "common" / "calendar_eventkit_fetch.swift"
+        if not script_path.exists():
+            raise RuntimeError(f"EventKit fetch script missing: {script_path}")
+
+        command = [
+            "/usr/bin/swift",
+            str(script_path),
+            str(window_start.timestamp()),
+            str(window_end.timestamp()),
+            ",".join(CALENDAR_NAMES),
+        ]
+        try:
+            raw_output = subprocess.check_output(command, text=True, stderr=subprocess.STDOUT)
+        except FileNotFoundError as exc:
+            raise RuntimeError("swift runtime is required for EventKit calendar fetch") from exc
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"EventKit calendar query failed: {exc.output.strip()}") from exc
+
+        if not raw_output.strip():
+            return []
+
+        try:
+            payloads = json.loads(raw_output)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Invalid JSON from EventKit calendar query: {exc}") from exc
+
+        if not isinstance(payloads, list):
+            raise RuntimeError("EventKit calendar query returned non-list payload")
+
+        events: list[CalendarEvent] = []
+        for item in payloads:
+            if not isinstance(item, dict):
+                continue
+            summary = str(item.get("summary", "")).strip()
+            calendar_name = str(item.get("calendar_name", "")).strip()
+            if not summary or not calendar_name:
+                continue
+
+            try:
+                start_epoch = float(item.get("start_epoch"))
+                end_epoch = float(item.get("end_epoch"))
+            except (TypeError, ValueError):
+                continue
+            start = datetime.fromtimestamp(start_epoch)
+            end = datetime.fromtimestamp(end_epoch)
+
+            description_raw = item.get("description")
+            description = str(description_raw).strip() if isinstance(description_raw, str) else None
+            event_url_raw = item.get("event_url")
+            event_url = str(event_url_raw).strip() if isinstance(event_url_raw, str) else ""
+            attendees_raw = item.get("attendees")
+            attendees: list[str] = []
+            if isinstance(attendees_raw, list):
+                attendees = [str(attendee).strip() for attendee in attendees_raw if str(attendee).strip()]
+
+            links = self.extract_invite_links(description, event_url)
+            events.append(
+                CalendarEvent(
+                    calendar_name=calendar_name,
+                    summary=summary,
+                    start=start,
+                    end=end,
+                    description=description or None,
+                    links=links,
+                    attendees=attendees,
+                )
+            )
+
+        deduped_events = self.dedupe_sort_events(events)
+        LOGGER.info("Fetched %s candidate Calendar events from %s via EventKit", len(deduped_events), ", ".join(CALENDAR_NAMES))
+        return deduped_events
+
+    def fetch_events_osascript(self, window_start: datetime, window_end: datetime) -> list[CalendarEvent]:
         script = f'''
 on sanitizeText(value)
   set originalDelimiters to AppleScript's text item delimiters
@@ -447,18 +539,27 @@ return joinedRows
             ]
             description = description_text.strip() or None
             links = self.extract_invite_links(description, event_url.strip())
+            start = datetime.fromisoformat(start_text)
+            end = datetime.fromisoformat(end_text)
+            normalized_start, normalized_end = self.normalize_event_window(start, end, window_start, window_end)
             events.append(
                 CalendarEvent(
                     calendar_name=calendar_name.strip(),
                     summary=summary,
-                    start=datetime.fromisoformat(start_text),
-                    end=datetime.fromisoformat(end_text),
+                    start=normalized_start,
+                    end=normalized_end,
                     description=description,
                     links=links,
                     attendees=attendees,
                 )
             )
 
+        deduped_events = self.dedupe_sort_events(events)
+        LOGGER.info("Fetched %s candidate Calendar events from %s via AppleScript", len(deduped_events), ", ".join(CALENDAR_NAMES))
+        return deduped_events
+
+    @staticmethod
+    def dedupe_sort_events(events: list[CalendarEvent]) -> list[CalendarEvent]:
         deduped_events = list(
             {
                 (
@@ -474,57 +575,173 @@ return joinedRows
             }.values()
         )
         deduped_events.sort(key=lambda event: (event.start, event.calendar_name, event.summary.lower()))
-        LOGGER.info("Fetched %s candidate Calendar events from %s", len(deduped_events), ", ".join(CALENDAR_NAMES))
         return deduped_events
 
     def match_events(self, events: list[CalendarEvent], recording_start: datetime, recording_end: datetime) -> list[CalendarEvent]:
         recording_duration = max(recording_end - recording_start, timedelta())
-        start_containing = [
+        non_low_signal = [event for event in events if not self.is_low_signal_event(event)]
+        filtered_events = non_low_signal or events
+        starts_soon = [
             event
-            for event in events
-            if event.start - CALENDAR_EARLY_START_GRACE <= recording_start <= event.end + CALENDAR_LATE_START_GRACE
+            for event in filtered_events
+            if recording_start < event.start <= recording_start + CALENDAR_EARLY_START_GRACE
         ]
+        started_or_ongoing = [
+            event
+            for event in filtered_events
+            if event.start <= recording_start <= event.end + CALENDAR_LATE_START_GRACE
+        ]
+        # Prefer meetings that are about to start over a prior meeting still in progress.
+        start_containing = starts_soon or started_or_ongoing
         if start_containing:
             reasonable_containing = [
                 event for event in start_containing if (event.end - event.start) <= CALENDAR_MAX_REASONABLE_DURATION
             ]
             selected = reasonable_containing or start_containing
-            LOGGER.info("Found %s events containing recording start", len(selected))
-            return selected
+            best_containing = self.pick_best_events(selected, recording_start, recording_duration)
+            if best_containing and not self.is_weak_match(best_containing[0]):
+                LOGGER.info("Found %s events containing recording start", len(best_containing))
+                return best_containing
+
+            alternative_window = timedelta(hours=4)
+            alternatives = [
+                event
+                for event in filtered_events
+                if not self.is_weak_match(event)
+                and abs(event.start - recording_start) <= alternative_window
+            ]
+            if alternatives:
+                vanta_alternatives = [
+                    event
+                    for event in alternatives
+                    if self.calendar_source_label(event.calendar_name) == "Vanta"
+                ]
+                prioritized = vanta_alternatives or alternatives
+                best_alternatives = self.pick_best_events(prioritized, recording_start, recording_duration)
+                LOGGER.info(
+                    "Switched from weak containing event to %s nearby alternatives",
+                    len(best_alternatives),
+                )
+                return best_alternatives
+
+            LOGGER.info("Found %s weak containing events and no better alternatives", len(best_containing))
+            return best_containing
 
         nearby = [
             event
-            for event in events
+            for event in filtered_events
             if abs(event.start - recording_start) <= CALENDAR_NEAREST_START_MAX_DELTA
         ]
         if not nearby:
-            LOGGER.info("Found 0 nearby calendar events for recording start")
-            return []
+            extended_nearby = [
+                event
+                for event in filtered_events
+                if abs(event.start - recording_start) <= timedelta(hours=4)
+            ]
+            if not extended_nearby:
+                LOGGER.info("Found 0 nearby calendar events for recording start")
+                return []
+            vanta_extended = [
+                event
+                for event in extended_nearby
+                if self.calendar_source_label(event.calendar_name) == "Vanta"
+            ]
+            prioritized_extended = vanta_extended or extended_nearby
+            resolved_extended = self.pick_best_events(prioritized_extended, recording_start, recording_duration)
+            LOGGER.info(
+                "Found %s extended-nearby calendar events for recording start",
+                len(resolved_extended),
+            )
+            return resolved_extended
 
         reasonable_nearby = [event for event in nearby if (event.end - event.start) <= CALENDAR_MAX_REASONABLE_DURATION]
         candidate_events = reasonable_nearby or nearby
-        start_deltas = {event: abs(event.start - recording_start) for event in candidate_events}
-        best_start_delta = min(start_deltas.values())
-        closest_start_events = [
-            event for event in candidate_events if start_deltas[event] <= best_start_delta + CALENDAR_START_TIE_WINDOW
-        ]
-        if len(closest_start_events) == 1:
-            LOGGER.info("Resolved single closest-start calendar event")
-            return closest_start_events
-
-        duration_deltas = {
-            event: abs((event.end - event.start) - recording_duration)
-            for event in closest_start_events
-        }
-        best_duration_delta = min(duration_deltas.values())
-        duration_tied_events = [
-            event for event in closest_start_events if duration_deltas[event] == best_duration_delta
-        ]
+        resolved = self.pick_best_events(candidate_events, recording_start, recording_duration)
         LOGGER.info(
             "Found %s nearby calendar events after start-time and duration tie-breaks",
-            len(duration_tied_events),
+            len(resolved),
         )
-        return duration_tied_events
+        return resolved
+
+    def pick_best_events(
+        self,
+        events: list[CalendarEvent],
+        recording_start: datetime,
+        recording_duration: timedelta,
+    ) -> list[CalendarEvent]:
+        if not events:
+            return []
+
+        start_deltas = [(event, abs(event.start - recording_start)) for event in events]
+        best_start_delta = min(delta for _, delta in start_deltas)
+        closest_start_events = [
+            event for event, delta in start_deltas if delta <= best_start_delta + CALENDAR_START_TIE_WINDOW
+        ]
+        if len(closest_start_events) == 1:
+            return closest_start_events
+
+        duration_deltas = [
+            (event, abs((event.end - event.start) - recording_duration))
+            for event in closest_start_events
+        ]
+        best_duration_delta = min(delta for _, delta in duration_deltas)
+        duration_tied_events = [
+            event for event, delta in duration_deltas if delta == best_duration_delta
+        ]
+        if len(duration_tied_events) == 1:
+            return duration_tied_events
+
+        vanta_events = [
+            event
+            for event in duration_tied_events
+            if self.calendar_source_label(event.calendar_name) == "Vanta"
+        ]
+        return vanta_events or duration_tied_events
+
+    @staticmethod
+    def is_low_signal_event(event: CalendarEvent) -> bool:
+        normalized = event.summary.lower()
+        return any(marker in normalized for marker in CalendarEventService._LOW_SIGNAL_TITLE_MARKERS)
+
+    @staticmethod
+    def is_weak_match(event: CalendarEvent) -> bool:
+        duration = event.end - event.start
+        return duration > CALENDAR_MAX_REASONABLE_DURATION or CalendarEventService.is_low_signal_event(event)
+
+    @staticmethod
+    def normalize_event_window(
+        start: datetime,
+        end: datetime,
+        window_start: datetime,
+        window_end: datetime,
+    ) -> tuple[datetime, datetime]:
+        # Calendar AppleScript can return recurring-series master timestamps; shift by common periods
+        # so matching uses the occurrence nearest to the query window.
+        if end >= window_start and start <= window_end:
+            return start, end
+
+        window_mid = window_start + (window_end - window_start) / 2
+        best_start = start
+        best_end = end
+        best_distance = abs(start - window_mid)
+        for period_days in (7, 14, 1):
+            period_seconds = period_days * 86400
+            shift_guess = round((window_mid - start).total_seconds() / period_seconds)
+            for shift in (shift_guess - 1, shift_guess, shift_guess + 1):
+                if shift == 0:
+                    continue
+                shifted_start = start + timedelta(days=period_days * shift)
+                shifted_end = end + timedelta(days=period_days * shift)
+                if shifted_end < window_start - timedelta(hours=12):
+                    continue
+                if shifted_start > window_end + timedelta(hours=12):
+                    continue
+                distance = abs(shifted_start - window_mid)
+                if distance < best_distance:
+                    best_start = shifted_start
+                    best_end = shifted_end
+                    best_distance = distance
+        return best_start, best_end
 
     @staticmethod
     def build_applescript_date(variable_name: str, value: datetime) -> str:

@@ -1,0 +1,21 @@
+{
+  "case_id": "2026-03-12_recording_window",
+  "recording_start": "2026-03-12T11:03:23",
+  "recording_duration_seconds": 1871.18,
+  "window_start": "2026-03-12T10:43:23",
+  "window_end": "2026-03-12T11:54:34.180000",
+  "events": [
+    {
+      "calendar_name": "Vanta",
+      "summary": "[Placeholder Item]",
+      "start": "2026-03-12T11:00:00",
+      "end": "2026-03-12T11:30:00"
+    },
+    {
+      "calendar_name": "Vanta",
+      "summary": "Eng Onboarding: Engineering Strategy",
+      "start": "2026-03-12T11:00:00",
+      "end": "2026-03-12T11:30:00"
+    }
+  ]
+}

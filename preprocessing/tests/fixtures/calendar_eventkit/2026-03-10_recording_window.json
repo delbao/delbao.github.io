@@ -1,0 +1,21 @@
+{
+  "case_id": "2026-03-10_recording_window",
+  "recording_start": "2026-03-10T11:32:30",
+  "recording_duration_seconds": 1891.42,
+  "window_start": "2026-03-10T11:12:30",
+  "window_end": "2026-03-10T12:24:01.420000",
+  "events": [
+    {
+      "calendar_name": "Vanta",
+      "summary": "AI Platform - Sprint Planning",
+      "start": "2026-03-10T11:30:00",
+      "end": "2026-03-10T12:00:00"
+    },
+    {
+      "calendar_name": "Vanta",
+      "summary": "Office Hours with Iccha",
+      "start": "2026-03-10T12:00:00",
+      "end": "2026-03-10T13:00:00"
+    }
+  ]
+}
