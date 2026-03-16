@@ -97,6 +97,105 @@ make serve
 That target mirrors the GitHub Actions media preparation step before starting
 Jekyll.
 
+## 4.1 Private posts search (Searchkit + Elasticsearch)
+
+Private-post search now uses a small Searchkit proxy service:
+
+- Homepage live search is wired in `private.md` and
+  `assets/js/home-search.js`.
+- The dedicated SERP page is `search.md` (served at `/search/`) and uses
+  `assets/js/search-page.js` with URL-synced `?q=` state.
+- Shared browser search transport lives in `assets/js/search-client.js`.
+- Search proxy backend lives in `search-api/server.js`.
+- Reindexing private posts into Elasticsearch is done by
+  `preprocessing/index_private_posts.py`.
+
+### Local run commands
+
+1. Start Elasticsearch:
+
+```bash
+docker run --name private-posts-es \
+  -p 9200:9200 \
+  -e discovery.type=single-node \
+  -e xpack.security.enabled=false \
+  docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+```
+
+2. Reindex private posts:
+
+```bash
+source .venv/bin/activate
+pip install -r preprocessing/requirements.txt
+make reindex-private-posts
+```
+
+3. Start Searchkit API:
+
+```bash
+cd search-api
+npm install
+cp .env.example .env
+npm start
+```
+
+4. Start Jekyll site:
+
+```bash
+cd ..
+make serve
+```
+
+Default local wiring expects:
+
+- Jekyll at `http://localhost:4000`
+- Search API at `http://localhost:3001/api/search`
+- Elasticsearch at `http://localhost:9200`
+
+### One-command local stack (with no-op detection)
+
+Use:
+
+```bash
+make serve-private-search
+```
+
+This ensures all three services are up:
+
+- Elasticsearch on `:9200`
+- Search API on `:3001`
+- Jekyll on `:4000`
+
+If any service is already running, the target no-ops for that service.
+
+Check status anytime:
+
+```bash
+make status-private-search
+```
+
+### Manual restart commands
+
+Restart everything:
+
+```bash
+make restart-private-search
+```
+
+Restart only one service:
+
+```bash
+make restart-private-search SERVICE=es
+make restart-private-search SERVICE=search
+make restart-private-search SERVICE=jekyll
+```
+
+Stop everything:
+
+```bash
+make stop-private-search
+```
+
 ## 5. Transcript preprocessing
 
 Python transcript-processing code lives under `preprocessing/`.

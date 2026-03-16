@@ -1,2 +1,4 @@
 litellm
 json-repair
+elasticsearch
+pyyaml

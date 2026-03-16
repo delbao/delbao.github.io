@@ -1,0 +1,156 @@
+.private-home-search {
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+.private-home-search-label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+.private-home-search-input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #c7ced8;
+  border-radius: 0.35rem;
+  font-size: 1rem;
+}
+
+.private-home-search-input:focus {
+  outline: 2px solid #8cb4ff;
+  outline-offset: 1px;
+}
+
+.private-home-search-panel {
+  position: absolute;
+  z-index: 10;
+  width: 100%;
+  background: #fff;
+  border: 1px solid #d6dce5;
+  border-radius: 0.35rem;
+  margin-top: 0.35rem;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+  padding: 0.4rem 0;
+}
+
+.private-home-search-status,
+.private-home-search-empty {
+  margin: 0.3rem 0.75rem;
+  color: #5a6678;
+  font-size: 0.92rem;
+}
+
+.private-home-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.home-search-result-item {
+  border-top: 1px solid #eef2f7;
+}
+
+.home-search-result-item:first-child {
+  border-top: 0;
+}
+
+.home-search-result-link {
+  display: block;
+  text-decoration: none;
+  padding: 0.55rem 0.75rem;
+}
+
+.home-search-result-link:hover {
+  background: #f6f9ff;
+}
+
+.home-search-result-title {
+  display: block;
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.home-search-result-meta {
+  display: block;
+  color: #5a6678;
+  font-size: 0.86rem;
+  margin-top: 0.2rem;
+}
+
+.private-home-search-footer {
+  display: block;
+  border-top: 1px solid #eef2f7;
+  margin-top: 0.2rem;
+  padding: 0.6rem 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.search-page h1 {
+  margin-top: 0;
+}
+
+#serp-searchbox {
+  margin-bottom: 1rem;
+}
+
+#serp-hits .ais-Hits-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.serp-hit-item {
+  border-top: 1px solid #e8ecf3;
+  padding: 1rem 0;
+}
+
+#serp-hits .ais-Hits-item:first-child .serp-hit-item {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.serp-hit-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.serp-hit-title a {
+  text-decoration: none;
+}
+
+.serp-hit-date {
+  margin: 0.25rem 0;
+  color: #5a6678;
+  font-size: 0.9rem;
+}
+
+.serp-hit-snippet {
+  margin: 0.2rem 0 0;
+}
+
+#serp-pagination .ais-Pagination-list {
+  list-style: none;
+  display: flex;
+  gap: 0.45rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+}
+
+#serp-pagination .ais-Pagination-link {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #d6dce5;
+  border-radius: 0.3rem;
+  text-decoration: none;
+}
+
+@media (max-width: 40rem) {
+  .private-home-search-panel {
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+}
