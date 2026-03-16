@@ -5,10 +5,18 @@
   {% if page.geomap %}
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.css">
   <script src="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.js"></script>
-  <script src="{{site.baseurl}}/public/lib/leaflet-ajax/dist/leaflet.ajax.min.js"></script>
+  {% assign leaflet_ajax_path = '/public/lib/leaflet-ajax/dist/leaflet.ajax.min.js' %}
+  {% assign has_leaflet_ajax = site.static_files | where_exp: "f", "f.path == leaflet_ajax_path" %}
+  {% if has_leaflet_ajax.size > 0 %}
+  <script src="{{site.baseurl}}{{leaflet_ajax_path}}"></script>
+  {% endif %}
   <script src='//api.tiles.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v0.0.2/Leaflet.fullscreen.min.js'></script>
   <link href='//api.tiles.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v0.0.2/leaflet.fullscreen.css' rel='stylesheet' />
-  <script src="{{site.baseurl}}/public/lib/leaflet-gpx/gpx.js"></script>
+  {% assign leaflet_gpx_path = '/public/lib/leaflet-gpx/gpx.js' %}
+  {% assign has_leaflet_gpx = site.static_files | where_exp: "f", "f.path == leaflet_gpx_path" %}
+  {% if has_leaflet_gpx.size > 0 %}
+  <script src="{{site.baseurl}}{{leaflet_gpx_path}}"></script>
+  {% endif %}
   {% endif %}
 {% if page.summary %}
 <meta name="description" content="{{ page.summary | escape }}">
