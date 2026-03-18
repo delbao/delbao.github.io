@@ -56,6 +56,112 @@
   margin: 0.45rem 0;
 }
 
+.post-llm-tool {
+  position: fixed;
+  top: 10rem;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.post-llm-tool-trigger {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  padding: 1.1rem 0.85rem;
+  border: 0;
+  border-radius: 1rem 0 0 1rem;
+  background: linear-gradient(135deg, #0f3d63, #1d6fa5);
+  box-shadow: 0 16px 30px rgba(15, 61, 99, 0.28);
+  color: #fff;
+  cursor: pointer;
+  text-align: center;
+}
+
+.post-llm-tool-trigger[disabled] {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.post-llm-tool-trigger-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.post-llm-tool-status-card,
+.post-llm-tool-preview {
+  box-sizing: border-box;
+}
+
+.post-llm-tool-status-card {
+  width: min(22rem, calc(100vw - 6rem));
+  max-height: 70vh;
+  padding: 0.9rem 1rem;
+  overflow: auto;
+  border: 1px solid #d9e4ef;
+  border-radius: 1rem 0 0 1rem;
+  background: linear-gradient(180deg, #fcfdff, #f3f8fc);
+  box-shadow: 0 18px 34px rgba(14, 29, 41, 0.18);
+}
+
+.post-llm-tool-download {
+  display: inline-block;
+  margin-top: 0.4rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.35rem;
+  text-decoration: none;
+}
+
+.post-llm-tool-download {
+  border: 1px solid #1d6fa5;
+  color: #1d6fa5;
+  background: transparent;
+}
+
+.post-llm-tool-status {
+  min-height: 1.4rem;
+  margin-top: 0.85rem;
+  color: #3f566b;
+}
+
+.post-llm-tool-preview {
+  width: 100%;
+  margin-top: 0.75rem;
+  max-height: 16rem;
+  padding: 0.75rem;
+  overflow: auto;
+  border: 1px solid #c7d7e6;
+  border-radius: 0.35rem;
+  background: #fff;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 42rem) {
+  .post-llm-tool {
+    top: auto;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    flex-direction: column-reverse;
+    align-items: flex-end;
+  }
+
+  .post-llm-tool-trigger {
+    writing-mode: horizontal-tb;
+    transform: none;
+    width: calc(100vw - 1.5rem);
+    max-width: 20rem;
+    border-radius: 0.9rem;
+  }
+
+  .post-llm-tool-status-card {
+    right: 0.75rem;
+    width: calc(100vw - 1.5rem);
+    border-radius: 1rem;
+  }
+}
+
 
 // Related posts
 .related {

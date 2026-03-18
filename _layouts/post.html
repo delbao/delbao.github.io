@@ -5,6 +5,38 @@ layout: default
 <div class="post">
   <h1 class="post-title">{{ page.title }}</h1>
   <span class="post-date">{{ page.date | date_to_string }}</span>
+  <section
+    class="post-llm-tool"
+    data-post-llm-tool
+    data-llm-api-url="{{ site.llm_job_api_url | default: 'http://localhost:3001/api/llm-jobs' }}"
+  >
+    <button
+      class="post-llm-tool-trigger"
+      type="button"
+      data-role="trigger"
+    >
+      <span class="post-llm-tool-trigger-title">Generate ANKI learning cards</span>
+    </button>
+    <div class="post-llm-tool-status-card" hidden data-role="status-card" aria-live="polite">
+      <p class="post-llm-tool-status" data-role="status"></p>
+      <a class="post-llm-tool-download" href="#" download hidden data-role="download">Download CSV</a>
+      <pre class="post-llm-tool-preview" hidden data-role="preview"></pre>
+    </div>
+    {% capture post_llm_input_text %}
+Title: {{ page.title }}
+Date: {{ page.date | date_to_string }}
+Source: {{ page.source | default: 'Unknown' }}
+
+Post content:
+{{ page.content | strip }}
+
+{% if page.raw_llm_input %}
+Raw transcript:
+{{ page.raw_llm_input }}
+{% endif %}
+    {% endcapture %}
+    <script type="application/json" data-role="job-input">{{ post_llm_input_text | strip | jsonify | replace: '</', '<\/' }}</script>
+  </section>
   {% if page.meeting %}
   <details class="meeting-metadata">
     <summary>Meeting Metadata</summary>
@@ -60,6 +92,7 @@ anchors.remove('.masthead-title');
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/picturefill/2.3.1/picturefill.min.js"></script>
+<script type="module" src="{{ site.baseurl }}/assets/js/post-llm-tool.js"></script>
 
 {% include tagsforpost.html tags=page.tags %}
 
