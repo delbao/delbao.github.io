@@ -106,7 +106,7 @@ Private-post search now uses a small API service:
 - The dedicated SERP page is `search.md` (served at `/search/`) and uses
   `assets/js/search-page.js` with URL-synced `?q=` state.
 - Shared browser search transport lives in `assets/js/search-client.js`.
-- Search proxy backend lives in `api/server.js`.
+- Search and job backend lives in `api/server.js`.
 - Reindexing private posts into Elasticsearch is done by
   `preprocessing/index_private_posts.py`.
 
@@ -149,8 +149,54 @@ make serve
 Default local wiring expects:
 
 - Jekyll at `http://localhost:4000`
-- API service at `http://localhost:3001/api/search`
+- API service at `http://localhost:3001`
 - Elasticsearch at `http://localhost:9200`
+
+### Async post actions with LLM jobs
+
+Post pages now include a small "Study Tools" panel that can submit an async LLM
+job using the current post as context. The HTTP layer lives in `api/server.js`,
+and the ANKI generation job itself runs in Python via
+`preprocessing/anki_job.py`.
+
+To enable it locally:
+
+1. Create the Python env and install preprocessing dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r preprocessing/requirements.txt
+```
+
+2. Copy the API env file:
+
+```bash
+cd api
+cp .env.example .env
+```
+
+3. Set your model credentials in the shell environment for LiteLLM, for
+example:
+
+```bash
+OPENAI_API_KEY=...
+```
+
+4. Start the API and Jekyll:
+
+```bash
+npm install
+npm start
+cd ..
+make serve
+```
+
+Then open a post page and use the "Generate ANKI CSV" button. The browser will
+submit a background job to `http://localhost:3001/api/llm-jobs`, poll for
+completion, and expose the CSV as a downloadable file when ready. The API
+spawns the Python job runner, which calls the model through LiteLLM and returns
+CSV output back to the UI through the API.
 
 ### One-command local stack (with no-op detection)
 

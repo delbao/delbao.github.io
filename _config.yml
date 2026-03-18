@@ -36,7 +36,7 @@ locale:             en_US
 image_base:          /public/images/
 
 # Do not copy these files to the output directory
-exclude: ["transfer.sh", "README.md", "instructions.md", "_private_posts/README.md", "search-api", "_posts/media"]
+exclude: ["transfer.sh", "README.md", "instructions.md", "_private_posts/README.md", "api", "_posts/media"]
 
 #fb_appid:           337414769782635
 
@@ -104,6 +104,7 @@ picture:
 
 google_analytics: G-4M6RGCGR4G
 search_api_url: "http://localhost:3001/api/search"
+llm_job_api_url: "http://localhost:3001/api/llm-jobs"
 search_index_name: "private_posts"
 
 collections:
