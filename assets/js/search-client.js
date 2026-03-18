@@ -34,7 +34,7 @@ export function createSearchkitProxyClient({ apiUrl }) {
     });
 
     if (!response.ok) {
-      throw new Error(`Search API request failed with status ${response.status}`);
+      throw new Error(`API search request failed with status ${response.status}`);
     }
 
     return response.json();

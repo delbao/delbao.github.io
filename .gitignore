@@ -11,5 +11,6 @@ __pycache__/
 *.py[cod]
 preprocessing/logs/
 search-api/node_modules/
+api/node_modules/
 assets/posts_media/
 .DS_Store

@@ -1,8 +1,8 @@
 {
-  "name": "private-posts-search-api",
+  "name": "private-posts-api",
   "version": "1.0.0",
   "private": true,
-  "description": "Searchkit proxy API for private posts search",
+  "description": "API service for private posts search and async post actions",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

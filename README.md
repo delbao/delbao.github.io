@@ -99,14 +99,14 @@ Jekyll.
 
 ## 4.1 Private posts search (Searchkit + Elasticsearch)
 
-Private-post search now uses a small Searchkit proxy service:
+Private-post search now uses a small API service:
 
 - Homepage live search is wired in `private.md` and
   `assets/js/home-search.js`.
 - The dedicated SERP page is `search.md` (served at `/search/`) and uses
   `assets/js/search-page.js` with URL-synced `?q=` state.
 - Shared browser search transport lives in `assets/js/search-client.js`.
-- Search proxy backend lives in `search-api/server.js`.
+- Search proxy backend lives in `api/server.js`.
 - Reindexing private posts into Elasticsearch is done by
   `preprocessing/index_private_posts.py`.
 
@@ -130,10 +130,10 @@ pip install -r preprocessing/requirements.txt
 make reindex-private-posts
 ```
 
-3. Start Searchkit API:
+3. Start the API service:
 
 ```bash
-cd search-api
+cd api
 npm install
 cp .env.example .env
 npm start
@@ -149,7 +149,7 @@ make serve
 Default local wiring expects:
 
 - Jekyll at `http://localhost:4000`
-- Search API at `http://localhost:3001/api/search`
+- API service at `http://localhost:3001/api/search`
 - Elasticsearch at `http://localhost:9200`
 
 ### One-command local stack (with no-op detection)
@@ -157,13 +157,13 @@ Default local wiring expects:
 Use:
 
 ```bash
-make serve-private-search
+make serve-private-stack
 ```
 
 This ensures all three services are up:
 
 - Elasticsearch on `:9200`
-- Search API on `:3001`
+- API service on `:3001`
 - Jekyll on `:4000`
 
 If any service is already running, the target no-ops for that service.
@@ -171,7 +171,7 @@ If any service is already running, the target no-ops for that service.
 Check status anytime:
 
 ```bash
-make status-private-search
+make status-private-stack
 ```
 
 ### Manual restart commands
@@ -179,21 +179,21 @@ make status-private-search
 Restart everything:
 
 ```bash
-make restart-private-search
+make restart-private-stack
 ```
 
 Restart only one service:
 
 ```bash
-make restart-private-search SERVICE=es
-make restart-private-search SERVICE=search
-make restart-private-search SERVICE=jekyll
+make restart-private-stack SERVICE=es
+make restart-private-stack SERVICE=api
+make restart-private-stack SERVICE=jekyll
 ```
 
 Stop everything:
 
 ```bash
-make stop-private-search
+make stop-private-stack
 ```
 
 ## 5. Transcript preprocessing
