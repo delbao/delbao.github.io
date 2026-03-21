@@ -18,7 +18,8 @@ DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_RETRIES = 2
 DEFAULT_PROMPT_NAME = "anki_cards"
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
-DEFAULT_FOCUSES = ("work_choice", "communication_clarity")
+ALLOWED_FOCUSES = ("word_choice", "communication_clarity", "speaking_structure")
+DEFAULT_FOCUSES = ALLOWED_FOCUSES
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,12 +84,16 @@ def normalize_focuses(payload: dict[str, Any]) -> tuple[str, ...]:
     if not isinstance(raw_focuses, list):
         return DEFAULT_FOCUSES
 
-    focuses = tuple(
-        str(item).strip()
-        for item in raw_focuses
-        if isinstance(item, str) and str(item).strip()
-    )
-    return focuses or DEFAULT_FOCUSES
+    focuses = []
+    for item in raw_focuses:
+        if not isinstance(item, str):
+            continue
+        focus = item.strip()
+        if focus and focus in ALLOWED_FOCUSES and focus not in focuses:
+            focuses.append(focus)
+
+    normalized = tuple(focuses)
+    return normalized or DEFAULT_FOCUSES
 
 
 def build_messages(args: argparse.Namespace, payload: dict[str, Any]) -> list[dict[str, str]]:
@@ -196,7 +201,7 @@ def build_fallback_cards(text: str, focuses: tuple[str, ...]) -> list[dict[str, 
 
     focus_prefix = ""
     if focuses:
-        focus_prefix = " / ".join(focus.replace("_", " ") for focus in focuses[:2])
+        focus_prefix = " / ".join(focus.replace("_", " ") for focus in focuses)
 
     for sentence in cleaned_sentences[:8]:
         subject = sentence[:56].rstrip(" ,;:")

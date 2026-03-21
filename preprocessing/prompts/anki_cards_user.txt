@@ -1,10 +1,9 @@
-Create high-value ANKI flashcards from the text below.
-
-Prefer 8 to 16 cards unless the material is too sparse.
-Focus on durable knowledge, decisions, action items, terminology, and key takeaways.
-
-Learning-focus requirements:
+Apply these learning-focus requirements while keeping the core task unchanged:
 {focus_requirements}
+
+Use the source text below as the full context for the job.
+If the text contains a title, preserve it in the card front when useful.
+If the text contains a video URL, preserve it in the card back when useful.
 
 Source text:
 {source_text}
