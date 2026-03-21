@@ -59,14 +59,17 @@
 .post-llm-tool {
   position: fixed;
   top: 10rem;
-  right: 0;
+  right: 0.75rem;
   z-index: 40;
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
 }
 
-.post-llm-tool-trigger {
+.post-llm-tool-rail {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   padding: 1.1rem 0.85rem;
@@ -75,19 +78,20 @@
   background: linear-gradient(135deg, #0f3d63, #1d6fa5);
   box-shadow: 0 16px 30px rgba(15, 61, 99, 0.28);
   color: #fff;
-  cursor: pointer;
   text-align: center;
+  cursor: pointer;
+  font: inherit;
 }
 
-.post-llm-tool-trigger[disabled] {
-  opacity: 0.72;
-  cursor: wait;
-}
-
-.post-llm-tool-trigger-title {
+.post-llm-tool-rail-title {
   font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.post-llm-tool-rail:focus-visible {
+  outline: 3px solid rgba(45, 97, 229, 0.22);
+  outline-offset: 3px;
 }
 
 .post-llm-tool-status-card,
@@ -106,18 +110,125 @@
   box-shadow: 0 18px 34px rgba(14, 29, 41, 0.18);
 }
 
-.post-llm-tool-download {
-  display: inline-block;
+.post-llm-tool-status-card[hidden] {
+  display: none;
+}
+
+.post-llm-tool-body[hidden] {
+  display: none;
+}
+
+.post-llm-tool-focus-label {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #557186;
+}
+
+.post-llm-tool-focuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.post-llm-tool-focus {
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.post-llm-tool-focus-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.post-llm-tool-focus-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  background: #2d61e5;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(45, 97, 229, 0.18);
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.post-llm-tool-focus:hover .post-llm-tool-focus-pill {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(45, 97, 229, 0.22);
+}
+
+.post-llm-tool-focus-title {
+  font-size: 0.92rem;
+  line-height: 1;
+  font-weight: 700;
+  color: inherit;
+}
+
+.post-llm-tool-focus-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.post-llm-tool-focus-icon::before {
+  content: "+";
+}
+
+.post-llm-tool-focus:has(.post-llm-tool-focus-input:checked) .post-llm-tool-focus-pill {
+  background: #f5538a;
+  box-shadow: 0 10px 20px rgba(245, 83, 138, 0.22);
+}
+
+.post-llm-tool-focus:has(.post-llm-tool-focus-input:checked) .post-llm-tool-focus-icon::before {
+  content: "\2713";
+}
+
+.post-llm-tool-focus:has(.post-llm-tool-focus-input:focus-visible) .post-llm-tool-focus-pill {
+  box-shadow: 0 0 0 3px rgba(29, 111, 165, 0.16);
+}
+
+.post-llm-tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   margin-top: 0.4rem;
+}
+
+.post-llm-tool-download,
+.post-llm-tool-copy-prompt {
+  display: inline-block;
   padding: 0.6rem 0.9rem;
   border-radius: 0.35rem;
   text-decoration: none;
+  font: inherit;
+}
+
+.post-llm-tool-download[hidden],
+.post-llm-tool-copy-prompt[hidden],
+.post-llm-tool-preview[hidden] {
+  display: none;
 }
 
 .post-llm-tool-download {
   border: 1px solid #1d6fa5;
   color: #1d6fa5;
   background: transparent;
+}
+
+.post-llm-tool-copy-prompt {
+  border: 1px solid #ccd7e2;
+  background: #fff;
+  color: #355167;
+  cursor: pointer;
 }
 
 .post-llm-tool-status {
@@ -138,6 +249,25 @@
   white-space: pre-wrap;
 }
 
+.post-llm-tool-generate {
+  display: block;
+  width: 100%;
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border: 0;
+  border-radius: 0.8rem;
+  background: linear-gradient(135deg, #0f3d63, #1d6fa5);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.post-llm-tool-generate[disabled] {
+  opacity: 0.72;
+  cursor: wait;
+}
+
 @media (max-width: 42rem) {
   .post-llm-tool {
     top: auto;
@@ -147,7 +277,7 @@
     align-items: flex-end;
   }
 
-  .post-llm-tool-trigger {
+  .post-llm-tool-rail {
     writing-mode: horizontal-tb;
     transform: none;
     width: calc(100vw - 1.5rem);
@@ -159,6 +289,10 @@
     right: 0.75rem;
     width: calc(100vw - 1.5rem);
     border-radius: 1rem;
+  }
+
+  .post-llm-tool-focuses {
+    gap: 0.55rem;
   }
 }
 

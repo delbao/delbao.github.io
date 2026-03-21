@@ -11,16 +11,41 @@ layout: default
     data-llm-api-url="{{ site.llm_job_api_url | default: 'http://localhost:3001/api/llm-jobs' }}"
   >
     <button
-      class="post-llm-tool-trigger"
+      class="post-llm-tool-rail"
       type="button"
-      data-role="trigger"
+      data-role="toggle"
+      aria-expanded="false"
+      aria-controls="learning-card-panel"
     >
-      <span class="post-llm-tool-trigger-title">Generate ANKI learning cards</span>
+      <span class="post-llm-tool-rail-title">ANKI Learning Card</span>
     </button>
-    <div class="post-llm-tool-status-card" hidden data-role="status-card" aria-live="polite">
-      <p class="post-llm-tool-status" data-role="status"></p>
-      <a class="post-llm-tool-download" href="#" download hidden data-role="download">Download CSV</a>
-      <pre class="post-llm-tool-preview" hidden data-role="preview"></pre>
+    <div class="post-llm-tool-status-card" data-role="status-card" aria-live="polite" hidden>
+      <div class="post-llm-tool-body" id="learning-card-panel" data-role="body" hidden>
+        <p class="post-llm-tool-focus-label">Learning focus</p>
+        <div class="post-llm-tool-focuses" data-role="focuses">
+          <label class="post-llm-tool-focus" data-role="focus-option">
+            <input class="post-llm-tool-focus-input" type="checkbox" data-role="focus" data-focus="work_choice" checked>
+            <span class="post-llm-tool-focus-pill">
+              <span class="post-llm-tool-focus-title">Word choice</span>
+              <span class="post-llm-tool-focus-icon" aria-hidden="true"></span>
+            </span>
+          </label>
+          <label class="post-llm-tool-focus" data-role="focus-option">
+            <input class="post-llm-tool-focus-input" type="checkbox" data-role="focus" data-focus="communication_clarity" checked>
+            <span class="post-llm-tool-focus-pill">
+              <span class="post-llm-tool-focus-title">Communication clarity</span>
+              <span class="post-llm-tool-focus-icon" aria-hidden="true"></span>
+            </span>
+          </label>
+        </div>
+        <p class="post-llm-tool-status" data-role="status"></p>
+        <button class="post-llm-tool-generate" type="button" data-role="submit">Generate</button>
+        <div class="post-llm-tool-actions">
+          <a class="post-llm-tool-download" href="#" download hidden data-role="download">Download CSV</a>
+          <button class="post-llm-tool-copy-prompt" type="button" hidden data-role="copy-prompt">Copy prompt</button>
+        </div>
+        <pre class="post-llm-tool-preview" hidden data-role="preview"></pre>
+      </div>
     </div>
     {% capture post_llm_input_text %}
 Title: {{ page.title }}
