@@ -118,6 +118,7 @@
   display: none;
 }
 
+.post-llm-tool-mode-label,
 .post-llm-tool-focus-label {
   margin: 0;
   font-size: 0.8rem;
@@ -127,6 +128,7 @@
   color: #557186;
 }
 
+.post-llm-tool-modes,
 .post-llm-tool-focuses {
   display: flex;
   flex-wrap: wrap;
@@ -134,17 +136,24 @@
   margin-top: 0.6rem;
 }
 
+.post-llm-tool-focus-label {
+  margin-top: 0.95rem;
+}
+
+.post-llm-tool-mode,
 .post-llm-tool-focus {
   display: inline-flex;
   cursor: pointer;
 }
 
+.post-llm-tool-mode-input,
 .post-llm-tool-focus-input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
 }
 
+.post-llm-tool-mode-pill,
 .post-llm-tool-focus-pill {
   display: inline-flex;
   align-items: center;
@@ -157,11 +166,13 @@
   transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
 }
 
+.post-llm-tool-mode:hover .post-llm-tool-mode-pill,
 .post-llm-tool-focus:hover .post-llm-tool-focus-pill {
   transform: translateY(-1px);
   box-shadow: 0 10px 20px rgba(45, 97, 229, 0.22);
 }
 
+.post-llm-tool-mode-title,
 .post-llm-tool-focus-title {
   font-size: 0.92rem;
   line-height: 1;
@@ -183,6 +194,7 @@
   content: "+";
 }
 
+.post-llm-tool-mode:has(.post-llm-tool-mode-input:checked) .post-llm-tool-mode-pill,
 .post-llm-tool-focus:has(.post-llm-tool-focus-input:checked) .post-llm-tool-focus-pill {
   background: #f5538a;
   box-shadow: 0 10px 20px rgba(245, 83, 138, 0.22);
@@ -192,6 +204,7 @@
   content: "\2713";
 }
 
+.post-llm-tool-mode:has(.post-llm-tool-mode-input:focus-visible) .post-llm-tool-mode-pill,
 .post-llm-tool-focus:has(.post-llm-tool-focus-input:focus-visible) .post-llm-tool-focus-pill {
   box-shadow: 0 0 0 3px rgba(29, 111, 165, 0.16);
 }
@@ -291,6 +304,7 @@
     border-radius: 1rem;
   }
 
+  .post-llm-tool-modes,
   .post-llm-tool-focuses {
     gap: 0.55rem;
   }

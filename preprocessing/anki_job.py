@@ -18,6 +18,8 @@ DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_RETRIES = 2
 DEFAULT_PROMPT_NAME = "anki_cards"
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+ALLOWED_MODES = ("self_improvement", "phrase_mining")
+DEFAULT_MODE = "self_improvement"
 ALLOWED_FOCUSES = ("word_choice", "communication_clarity", "speaking_structure")
 DEFAULT_FOCUSES = ALLOWED_FOCUSES
 
@@ -72,11 +74,28 @@ def load_prompt(prompt_name: str, prompt_kind: str) -> str:
 
 
 @lru_cache(maxsize=None)
+def load_mode_prompt(mode_name: str) -> str:
+    mode_path = PROMPTS_DIR / f"anki_mode_{mode_name}.txt"
+    if not mode_path.exists():
+        raise FileNotFoundError(f"Missing mode prompt file: {mode_path}")
+    return mode_path.read_text(encoding="utf-8").strip()
+
+
+@lru_cache(maxsize=None)
 def load_focus_prompt(focus_name: str) -> str:
     focus_path = PROMPTS_DIR / f"anki_focus_{focus_name}.txt"
     if not focus_path.exists():
         raise FileNotFoundError(f"Missing focus prompt file: {focus_path}")
     return focus_path.read_text(encoding="utf-8").strip()
+
+
+def normalize_mode(payload: dict[str, Any]) -> str:
+    raw_mode = payload.get("mode")
+    if not isinstance(raw_mode, str):
+        return DEFAULT_MODE
+
+    mode = raw_mode.strip()
+    return mode if mode in ALLOWED_MODES else DEFAULT_MODE
 
 
 def normalize_focuses(payload: dict[str, Any]) -> tuple[str, ...]:
@@ -99,10 +118,12 @@ def normalize_focuses(payload: dict[str, Any]) -> tuple[str, ...]:
 def build_messages(args: argparse.Namespace, payload: dict[str, Any]) -> list[dict[str, str]]:
     text = truncate_text(payload.get("text"), 36000)
     prompt_name = str(payload.get("prompt_name") or args.prompt_name or DEFAULT_PROMPT_NAME).strip() or DEFAULT_PROMPT_NAME
+    mode_requirements = load_mode_prompt(normalize_mode(payload))
     focus_requirements = "\n".join(f"- {load_focus_prompt(focus_name)}" for focus_name in normalize_focuses(payload))
     system_prompt = load_prompt(prompt_name, "system")
     user_prompt = load_prompt(prompt_name, "user").format(
         source_text=text,
+        mode_requirements=mode_requirements,
         focus_requirements=focus_requirements,
     )
 
@@ -175,7 +196,7 @@ def call_model(args: argparse.Namespace, messages: list[dict[str, str]]) -> dict
     raise last_error
 
 
-def build_fallback_cards(text: str, focuses: tuple[str, ...]) -> list[dict[str, str]]:
+def build_fallback_cards(text: str, mode: str, focuses: tuple[str, ...]) -> list[dict[str, str]]:
     cards: list[dict[str, str]] = []
     lines = [line.strip() for line in text.splitlines() if line.strip()]
 
@@ -199,9 +220,9 @@ def build_fallback_cards(text: str, focuses: tuple[str, ...]) -> list[dict[str, 
             if len(part) >= 25:
                 cleaned_sentences.append(part)
 
-    focus_prefix = ""
-    if focuses:
-        focus_prefix = " / ".join(focus.replace("_", " ") for focus in focuses)
+    prefixes = [mode.replace("_", " ")] if mode else []
+    prefixes.extend(focus.replace("_", " ") for focus in focuses)
+    focus_prefix = " / ".join(prefixes)
 
     for sentence in cleaned_sentences[:8]:
         subject = sentence[:56].rstrip(" ,;:")
@@ -249,6 +270,7 @@ def main() -> int:
         raise ValueError("A non-empty text payload is required")
 
     text = str(payload.get("text"))
+    mode = normalize_mode(payload)
     focuses = normalize_focuses(payload)
     if provider_credentials_configured():
         log("Building prompt")
@@ -259,7 +281,7 @@ def main() -> int:
             raise ValueError("Expected 'cards' array in LLM response")
     else:
         log("No LLM provider credentials found; using local fallback card generator")
-        cards = build_fallback_cards(text, focuses)
+        cards = build_fallback_cards(text, mode, focuses)
 
     log(f"Converting {len(cards)} cards to CSV")
     csv_content = to_csv(cards)

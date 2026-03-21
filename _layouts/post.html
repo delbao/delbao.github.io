@@ -21,6 +21,21 @@ layout: default
     </button>
     <div class="post-llm-tool-status-card" data-role="status-card" aria-live="polite" hidden>
       <div class="post-llm-tool-body" id="learning-card-panel" data-role="body" hidden>
+        <p class="post-llm-tool-mode-label">Learning mode</p>
+        <div class="post-llm-tool-modes" data-role="modes">
+          <label class="post-llm-tool-mode" data-role="mode-option">
+            <input class="post-llm-tool-mode-input" type="radio" name="anki-learning-mode" data-role="mode" data-mode="self_improvement" checked>
+            <span class="post-llm-tool-mode-pill">
+              <span class="post-llm-tool-mode-title">Self improvement</span>
+            </span>
+          </label>
+          <label class="post-llm-tool-mode" data-role="mode-option">
+            <input class="post-llm-tool-mode-input" type="radio" name="anki-learning-mode" data-role="mode" data-mode="phrase_mining">
+            <span class="post-llm-tool-mode-pill">
+              <span class="post-llm-tool-mode-title">Useful phrases</span>
+            </span>
+          </label>
+        </div>
         <p class="post-llm-tool-focus-label">Learning focus</p>
         <div class="post-llm-tool-focuses" data-role="focuses">
           <label class="post-llm-tool-focus" data-role="focus-option">

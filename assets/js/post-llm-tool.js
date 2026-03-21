@@ -14,6 +14,11 @@ function getSelectedFocuses(root) {
   return Array.from(root.querySelectorAll("[data-role='focus']:checked")).map((node) => node.dataset.focus).filter(Boolean);
 }
 
+function getSelectedMode(root) {
+  const selected = root.querySelector("[data-role='mode']:checked");
+  return selected ? selected.dataset.mode : "self_improvement";
+}
+
 async function fetchJsonWithTimeout(url, options, timeoutMs, fallbackMessage) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -41,13 +46,14 @@ async function fetchJsonWithTimeout(url, options, timeoutMs, fallbackMessage) {
   }
 }
 
-async function createJob({ apiUrl, text, focuses }) {
+async function createJob({ apiUrl, text, mode, focuses }) {
   return fetchJsonWithTimeout(apiUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       jobType: "anki_csv",
       text,
+      mode,
       focuses,
     }),
   }, CREATE_JOB_TIMEOUT_MS, "Could not reach the API service. Make sure the backend is running on localhost:3001.");
@@ -117,6 +123,7 @@ async function runJob(root) {
   const download = root.querySelector("[data-role='download']");
   const copyPrompt = root.querySelector("[data-role='copy-prompt']");
   const preview = root.querySelector("[data-role='preview']");
+  const mode = getSelectedMode(root);
   const focuses = getSelectedFocuses(root);
 
   card.hidden = false;
@@ -130,7 +137,7 @@ async function runJob(root) {
 
   try {
     const text = parseJobInput(root);
-    const created = await createJob({ apiUrl, text, focuses });
+    const created = await createJob({ apiUrl, text, mode, focuses });
 
     status.textContent = "Job submitted. Waiting for the LLM response...";
     renderLogs(root, ["Queued job"]);

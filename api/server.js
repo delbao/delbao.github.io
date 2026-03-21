@@ -215,6 +215,7 @@ function runPythonJob(job) {
         text: job.text,
         file_stem: job.fileStem,
         prompt_name: job.promptName,
+        mode: job.mode,
         focuses: job.focuses,
       })
     );
@@ -276,7 +277,7 @@ app.post("/api/search", async (req, res) => {
 app.post("/api/llm-jobs", (req, res) => {
   cleanupJobs();
 
-  const { jobType, text = "", focuses = [] } = req.body || {};
+  const { jobType, text = "", mode = "", focuses = [] } = req.body || {};
   if (jobType !== "anki_csv") {
     res.status(400).json({ error: "Only jobType=anki_csv is currently supported" });
     return;
@@ -294,6 +295,7 @@ app.post("/api/llm-jobs", (req, res) => {
     text,
     fileStem: deriveFileStemFromText(text),
     promptName: pythonJobPromptName,
+    mode: typeof mode === "string" ? mode.trim() : "",
     focuses: Array.isArray(focuses) ? focuses.filter((item) => typeof item === "string" && item.trim()) : [],
     status: "queued",
     logs: ["Queued job"],

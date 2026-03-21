@@ -1,0 +1,1 @@
+Treat the transcript as a source of reusable language. Extract paragraph-level moments that contain useful phrases, framing, transitions, or explanation patterns.

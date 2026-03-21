@@ -1,3 +1,6 @@
+Apply this learning mode while keeping the core task unchanged:
+{mode_requirements}
+
 Apply these learning-focus requirements while keeping the core task unchanged:
 {focus_requirements}
 
