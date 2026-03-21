@@ -16,11 +16,17 @@ const pythonExecutable = (() => {
   const repoVenvPython = path.resolve(__dirname, "..", ".venv", "bin", "python");
   return process.env.PYTHON_EXECUTABLE || (fs.existsSync(repoVenvPython) ? repoVenvPython : "python3");
 })();
+const shouldForceArm64Python =
+  process.platform === "darwin" &&
+  process.arch === "x64" &&
+  fs.existsSync("/usr/bin/arch") &&
+  fs.existsSync(path.resolve(__dirname, "..", ".venv", "bin", "python"));
 const pythonJobScript = path.resolve(__dirname, "..", "preprocessing", "anki_job.py");
 const pythonJobModel = process.env.ANKI_JOB_MODEL || "gpt-4.1-mini";
 const pythonJobFallbackModel = process.env.ANKI_JOB_FALLBACK_MODEL || "";
 const pythonJobTimeoutSeconds = Number(process.env.ANKI_JOB_TIMEOUT_SECONDS || 120);
 const pythonJobRetries = Number(process.env.ANKI_JOB_RETRIES || 2);
+const pythonJobPromptName = process.env.ANKI_JOB_PROMPT_NAME || "anki_cards";
 
 const auth = (() => {
   if (process.env.ELASTICSEARCH_API_KEY) {
@@ -94,6 +100,27 @@ function cleanupJobs() {
   }
 }
 
+function appendJobLog(job, message) {
+  if (!job || typeof message !== "string") {
+    return;
+  }
+
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return;
+  }
+
+  if (!Array.isArray(job.logs)) {
+    job.logs = [];
+  }
+
+  job.logs.push(trimmed);
+  if (job.logs.length > 200) {
+    job.logs = job.logs.slice(-200);
+  }
+  job.updatedAt = Date.now();
+}
+
 function slugifyFilePart(value) {
   return String(value || "anki-cards")
     .toLowerCase()
@@ -121,7 +148,7 @@ function deriveFileStemFromText(text) {
 
 function runPythonJob(job) {
   return new Promise((resolve, reject) => {
-    const args = [
+    const pythonArgs = [
       pythonJobScript,
       "--model",
       pythonJobModel,
@@ -129,13 +156,18 @@ function runPythonJob(job) {
       String(pythonJobTimeoutSeconds),
       "--retries",
       String(pythonJobRetries),
+      "--prompt-name",
+      pythonJobPromptName,
     ];
 
     if (pythonJobFallbackModel) {
-      args.push("--fallback-model", pythonJobFallbackModel);
+      pythonArgs.push("--fallback-model", pythonJobFallbackModel);
     }
 
-    const child = spawn(pythonExecutable, args, {
+    const command = shouldForceArm64Python ? "/usr/bin/arch" : pythonExecutable;
+    const args = shouldForceArm64Python ? ["-arm64", pythonExecutable, ...pythonArgs] : pythonArgs;
+
+    const child = spawn(command, args, {
       cwd: path.resolve(__dirname, ".."),
       env: process.env,
       stdio: ["pipe", "pipe", "pipe"],
@@ -143,13 +175,20 @@ function runPythonJob(job) {
 
     let stdout = "";
     let stderr = "";
+    let stderrBuffer = "";
 
     child.stdout.on("data", (chunk) => {
       stdout += chunk.toString();
     });
 
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      const text = chunk.toString();
+      stderr += text;
+      stderrBuffer += text;
+
+      const lines = stderrBuffer.split(/\r?\n/);
+      stderrBuffer = lines.pop() || "";
+      lines.forEach((line) => appendJobLog(job, line));
     });
 
     child.on("error", (error) => {
@@ -157,6 +196,7 @@ function runPythonJob(job) {
     });
 
     child.on("close", (code) => {
+      appendJobLog(job, stderrBuffer);
       if (code !== 0) {
         reject(new Error(stderr.trim() || `Python job exited with code ${code}`));
         return;
@@ -174,6 +214,8 @@ function runPythonJob(job) {
         job_type: job.jobType,
         text: job.text,
         file_stem: job.fileStem,
+        prompt_name: job.promptName,
+        focuses: job.focuses,
       })
     );
     child.stdin.end();
@@ -188,6 +230,7 @@ async function executeJob(jobId) {
 
   job.status = "running";
   job.updatedAt = Date.now();
+  appendJobLog(job, `Starting ${job.jobType} job`);
 
   try {
     if (job.jobType !== "anki_csv") {
@@ -199,6 +242,7 @@ async function executeJob(jobId) {
       throw new Error("Python job returned no CSV content");
     }
 
+    appendJobLog(job, "Job finished successfully");
     job.status = "completed";
     job.result = {
       content: result.content,
@@ -206,6 +250,7 @@ async function executeJob(jobId) {
       fileName: result.file_name || `${job.fileStem || "anki-cards"}-anki.csv`,
     };
   } catch (error) {
+    appendJobLog(job, error instanceof Error ? error.message : "Unknown job failure");
     job.status = "failed";
     job.error = error instanceof Error ? error.message : "Unknown job failure";
   } finally {
@@ -231,7 +276,7 @@ app.post("/api/search", async (req, res) => {
 app.post("/api/llm-jobs", (req, res) => {
   cleanupJobs();
 
-  const { jobType, text = "" } = req.body || {};
+  const { jobType, text = "", focuses = [] } = req.body || {};
   if (jobType !== "anki_csv") {
     res.status(400).json({ error: "Only jobType=anki_csv is currently supported" });
     return;
@@ -248,7 +293,10 @@ app.post("/api/llm-jobs", (req, res) => {
     jobType,
     text,
     fileStem: deriveFileStemFromText(text),
+    promptName: pythonJobPromptName,
+    focuses: Array.isArray(focuses) ? focuses.filter((item) => typeof item === "string" && item.trim()) : [],
     status: "queued",
+    logs: ["Queued job"],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -275,6 +323,7 @@ app.get("/api/llm-jobs/:jobId", (req, res) => {
     jobId: job.id,
     jobType: job.jobType,
     status: job.status,
+    logs: Array.isArray(job.logs) ? job.logs : [],
     error: job.error,
     result: job.status === "completed" ? job.result : undefined,
     createdAt: job.createdAt,

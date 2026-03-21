@@ -1,0 +1,10 @@
+Create high-value ANKI flashcards from the text below.
+
+Prefer 8 to 16 cards unless the material is too sparse.
+Focus on durable knowledge, decisions, action items, terminology, and key takeaways.
+
+Learning-focus requirements:
+{focus_requirements}
+
+Source text:
+{source_text}

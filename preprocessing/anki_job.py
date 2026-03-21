@@ -5,15 +5,20 @@ import argparse
 import csv
 import io
 import json
+import os
+import re
 import sys
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
-
-from litellm import completion
 
 
 DEFAULT_MODEL = "gpt-4.1-mini"
 DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_RETRIES = 2
+DEFAULT_PROMPT_NAME = "anki_cards"
+PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+DEFAULT_FOCUSES = ("work_choice", "communication_clarity")
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,41 +45,70 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_RETRIES,
         help="Number of retries for provider failures or malformed JSON responses.",
     )
+    parser.add_argument(
+        "--prompt-name",
+        default=DEFAULT_PROMPT_NAME,
+        help="Prompt template prefix under preprocessing/prompts/.",
+    )
     return parser.parse_args()
 
 
 def truncate_text(value: object, max_length: int) -> str:
-  if not isinstance(value, str):
-      return ""
-  trimmed = value.strip()
-  if len(trimmed) <= max_length:
-      return trimmed
-  return f"{trimmed[:max_length]}\n...[truncated]"
+    if not isinstance(value, str):
+        return ""
+    trimmed = value.strip()
+    if len(trimmed) <= max_length:
+        return trimmed
+    return f"{trimmed[:max_length]}\n...[truncated]"
 
 
-def build_messages(payload: dict[str, Any]) -> list[dict[str, str]]:
-    text = truncate_text(payload.get("text"), 36000)
+@lru_cache(maxsize=None)
+def load_prompt(prompt_name: str, prompt_kind: str) -> str:
+    prompt_path = PROMPTS_DIR / f"{prompt_name}_{prompt_kind}.txt"
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"Missing prompt file: {prompt_path}")
+    return prompt_path.read_text(encoding="utf-8").strip()
 
-    system_prompt = (
-        "You create study materials from meeting and note content. "
-        "Return JSON with one key named cards. cards must be an array of objects with "
-        "string keys front and back. Keep cards concise, factual, and grounded only in the provided context."
+
+@lru_cache(maxsize=None)
+def load_focus_prompt(focus_name: str) -> str:
+    focus_path = PROMPTS_DIR / f"anki_focus_{focus_name}.txt"
+    if not focus_path.exists():
+        raise FileNotFoundError(f"Missing focus prompt file: {focus_path}")
+    return focus_path.read_text(encoding="utf-8").strip()
+
+
+def normalize_focuses(payload: dict[str, Any]) -> tuple[str, ...]:
+    raw_focuses = payload.get("focuses")
+    if not isinstance(raw_focuses, list):
+        return DEFAULT_FOCUSES
+
+    focuses = tuple(
+        str(item).strip()
+        for item in raw_focuses
+        if isinstance(item, str) and str(item).strip()
     )
-    user_prompt = "\n\n".join(
-        part
-        for part in [
-            "Create high-value ANKI flashcards from the text below.",
-            "Prefer 8 to 16 cards unless the material is too sparse.",
-            "Focus on durable knowledge, decisions, action items, terminology, and key takeaways.",
-            f"Source text:\n{text}",
-        ]
-        if part
+    return focuses or DEFAULT_FOCUSES
+
+
+def build_messages(args: argparse.Namespace, payload: dict[str, Any]) -> list[dict[str, str]]:
+    text = truncate_text(payload.get("text"), 36000)
+    prompt_name = str(payload.get("prompt_name") or args.prompt_name or DEFAULT_PROMPT_NAME).strip() or DEFAULT_PROMPT_NAME
+    focus_requirements = "\n".join(f"- {load_focus_prompt(focus_name)}" for focus_name in normalize_focuses(payload))
+    system_prompt = load_prompt(prompt_name, "system")
+    user_prompt = load_prompt(prompt_name, "user").format(
+        source_text=text,
+        focus_requirements=focus_requirements,
     )
 
     return [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
+
+
+def log(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
 
 
 def extract_text_content(message: object) -> str:
@@ -90,7 +124,22 @@ def extract_text_content(message: object) -> str:
     raise ValueError("LiteLLM response did not contain text content")
 
 
+def provider_credentials_configured() -> bool:
+    return any(
+        os.environ.get(name)
+        for name in (
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "GEMINI_API_KEY",
+            "GOOGLE_API_KEY",
+            "AZURE_OPENAI_API_KEY",
+        )
+    )
+
+
 def call_model(args: argparse.Namespace, messages: list[dict[str, str]]) -> dict[str, Any]:
+    from litellm import completion
+
     models = [args.model]
     if args.fallback_model and args.fallback_model != args.model:
         models.append(args.fallback_model)
@@ -121,6 +170,54 @@ def call_model(args: argparse.Namespace, messages: list[dict[str, str]]) -> dict
     raise last_error
 
 
+def build_fallback_cards(text: str, focuses: tuple[str, ...]) -> list[dict[str, str]]:
+    cards: list[dict[str, str]] = []
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+    title_line = next((line for line in lines if line.lower().startswith("title:")), "")
+    if title_line:
+        title = title_line.split(":", 1)[1].strip()
+        if title:
+            cards.append(
+                {
+                    "front": "What is the title of this note?",
+                    "back": title,
+                }
+            )
+
+    cleaned_sentences: list[str] = []
+    for line in lines:
+        if line.lower().startswith(("title:", "date:", "source:", "post content:", "raw transcript:")):
+            continue
+        parts = [part.strip() for part in re.split(r"(?<=[.!?])\s+", line) if part.strip()]
+        for part in parts:
+            if len(part) >= 25:
+                cleaned_sentences.append(part)
+
+    focus_prefix = ""
+    if focuses:
+        focus_prefix = " / ".join(focus.replace("_", " ") for focus in focuses[:2])
+
+    for sentence in cleaned_sentences[:8]:
+        subject = sentence[:56].rstrip(" ,;:")
+        cards.append(
+            {
+                "front": f"What should you remember about '{subject}'?" if not focus_prefix else f"[{focus_prefix}] What should you remember about '{subject}'?",
+                "back": sentence,
+            }
+        )
+
+    if not cards and text.strip():
+        cards.append(
+            {
+                "front": "What is the main content of this note?",
+                "back": text.strip()[:500],
+            }
+        )
+
+    return cards
+
+
 def to_csv(cards: list[dict[str, Any]]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
@@ -138,6 +235,7 @@ def to_csv(cards: list[dict[str, Any]]) -> str:
 
 def main() -> int:
     args = parse_args()
+    log("Reading job payload")
     payload = json.load(sys.stdin)
     if payload.get("job_type") != "anki_csv":
         raise ValueError("Only job_type=anki_csv is supported")
@@ -145,15 +243,25 @@ def main() -> int:
     if not isinstance(payload.get("text"), str) or not str(payload.get("text")).strip():
         raise ValueError("A non-empty text payload is required")
 
-    parsed = call_model(args, build_messages(payload))
-    cards = parsed.get("cards")
-    if not isinstance(cards, list):
-        raise ValueError("Expected 'cards' array in LLM response")
+    text = str(payload.get("text"))
+    focuses = normalize_focuses(payload)
+    if provider_credentials_configured():
+        log("Building prompt")
+        parsed = call_model(args, build_messages(args, payload))
+        log("Parsing model response")
+        cards = parsed.get("cards")
+        if not isinstance(cards, list):
+            raise ValueError("Expected 'cards' array in LLM response")
+    else:
+        log("No LLM provider credentials found; using local fallback card generator")
+        cards = build_fallback_cards(text, focuses)
 
+    log(f"Converting {len(cards)} cards to CSV")
     csv_content = to_csv(cards)
     if not csv_content.strip():
         raise ValueError("Generated CSV was empty")
 
+    log("Writing final job result")
     json.dump(
         {
             "content": csv_content,
