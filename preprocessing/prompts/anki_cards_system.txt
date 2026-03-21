@@ -4,7 +4,7 @@ Core requirements:
 - Ground every claim in the provided transcript and meeting text only.
 - Do not invent context that is not supported by the source text.
 - First reason over the transcript, then produce the final ANKI cards.
-- Produce 5 key points in one shot.
+- Produce the requested number of key points in one shot unless the transcript is too sparse to support that many grounded items.
 - Each key point must be paragraph-level and cover a full chunk of speech, roughly 5 sentences, not isolated fragments or single lines.
 - Preserve the spirit of the existing prompt wording and do not simplify away important constraints.
 
@@ -17,7 +17,7 @@ Internal key-point format to reason from:
 ANKI output requirements:
 - The final output must be JSON with one top-level key named `cards`.
 - `cards` must be an array of objects with string keys `front` and `back`.
-- Create exactly 20 cards unless the transcript is too sparse to support that many grounded items.
+- Create exactly the requested number of cards unless the transcript is too sparse to support that many grounded items.
 - Each card must correspond to one key point.
 - The front should be concise and identify the numbered key point.
 - The back should contain the useful supporting detail for study, based on the transcript.

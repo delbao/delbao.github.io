@@ -19,6 +19,17 @@ function getSelectedMode(root) {
   return selected ? selected.dataset.mode : "self_improvement";
 }
 
+function getSelectedPointCount(root) {
+  const input = root.querySelector("[data-role='point-count']");
+  const parsed = Number.parseInt(input ? input.value : "5", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5;
+}
+
+function getUserPointers(root) {
+  const input = root.querySelector("[data-role='user-pointers']");
+  return input ? input.value.trim() : "";
+}
+
 async function fetchJsonWithTimeout(url, options, timeoutMs, fallbackMessage) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -46,7 +57,8 @@ async function fetchJsonWithTimeout(url, options, timeoutMs, fallbackMessage) {
   }
 }
 
-async function createJob({ apiUrl, text, mode, focuses }) {
+async function createJob({ apiUrl, text, mode, focuses, pointCount, userPointers }) {
+  const normalizedPointCount = Number.parseInt(pointCount, 10);
   return fetchJsonWithTimeout(apiUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -55,6 +67,8 @@ async function createJob({ apiUrl, text, mode, focuses }) {
       text,
       mode,
       focuses,
+      pointCount: Number.isFinite(normalizedPointCount) && normalizedPointCount > 0 ? normalizedPointCount : 5,
+      userPointers,
     }),
   }, CREATE_JOB_TIMEOUT_MS, "Could not reach the API service. Make sure the backend is running on localhost:3001.");
 }
@@ -125,6 +139,8 @@ async function runJob(root) {
   const preview = root.querySelector("[data-role='preview']");
   const mode = getSelectedMode(root);
   const focuses = getSelectedFocuses(root);
+  const pointCount = getSelectedPointCount(root);
+  const userPointers = getUserPointers(root);
 
   card.hidden = false;
   body.hidden = false;
@@ -137,7 +153,7 @@ async function runJob(root) {
 
   try {
     const text = parseJobInput(root);
-    const created = await createJob({ apiUrl, text, mode, focuses });
+    const created = await createJob({ apiUrl, text, mode, focuses, pointCount, userPointers });
 
     status.textContent = "Job submitted. Waiting for the LLM response...";
     renderLogs(root, ["Queued job"]);

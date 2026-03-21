@@ -140,6 +140,59 @@
   margin-top: 0.95rem;
 }
 
+.post-llm-tool-point-count {
+  margin-top: 0.95rem;
+}
+
+.post-llm-tool-point-count-label,
+.post-llm-tool-pointers-label {
+  display: block;
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #557186;
+}
+
+.post-llm-tool-pointers {
+  margin-top: 0.95rem;
+}
+
+.post-llm-tool-point-count-input {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #c7d7e6;
+  border-radius: 0.7rem;
+  background: #fff;
+  color: #173246;
+  font: inherit;
+}
+
+.post-llm-tool-pointers-input {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #c7d7e6;
+  border-radius: 0.7rem;
+  background: #fff;
+  color: #173246;
+  font: inherit;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.post-llm-tool-point-count-input:focus-visible {
+  outline: 3px solid rgba(29, 111, 165, 0.18);
+  outline-offset: 2px;
+}
+
+.post-llm-tool-pointers-input:focus-visible {
+  outline: 3px solid rgba(29, 111, 165, 0.18);
+  outline-offset: 2px;
+}
+
 .post-llm-tool-mode,
 .post-llm-tool-focus {
   display: inline-flex;

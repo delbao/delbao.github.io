@@ -36,6 +36,30 @@ layout: default
             </span>
           </label>
         </div>
+        <div class="post-llm-tool-point-count">
+          <label class="post-llm-tool-point-count-label" for="anki-point-count">Number of points</label>
+          <input
+            id="anki-point-count"
+            class="post-llm-tool-point-count-input"
+            type="number"
+            min="1"
+            max="50"
+            step="1"
+            value="5"
+            inputmode="numeric"
+            data-role="point-count"
+          >
+        </div>
+        <div class="post-llm-tool-pointers">
+          <label class="post-llm-tool-pointers-label" for="anki-user-pointers">Your pointers</label>
+          <textarea
+            id="anki-user-pointers"
+            class="post-llm-tool-pointers-input"
+            rows="3"
+            placeholder="Keywords or short phrases, separated by commas or new lines"
+            data-role="user-pointers"
+          ></textarea>
+        </div>
         <p class="post-llm-tool-focus-label">Learning focus</p>
         <div class="post-llm-tool-focuses" data-role="focuses">
           <label class="post-llm-tool-focus" data-role="focus-option">
@@ -73,9 +97,7 @@ layout: default
 Title: {{ page.title }}
 Date: {{ page.date | date_to_string }}
 Source: {{ page.source | default: 'Unknown' }}
-
-Post content:
-{{ page.content | strip }}
+Video URL: {{ page.video_url | default: '' }}
 
 {% if page.raw_llm_input %}
 Raw transcript:

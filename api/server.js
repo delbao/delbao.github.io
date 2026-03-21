@@ -23,7 +23,6 @@ const shouldForceArm64Python =
   fs.existsSync(path.resolve(__dirname, "..", ".venv", "bin", "python"));
 const pythonJobScript = path.resolve(__dirname, "..", "preprocessing", "anki_job.py");
 const pythonJobModel = process.env.ANKI_JOB_MODEL || "gpt-4.1-mini";
-const pythonJobFallbackModel = process.env.ANKI_JOB_FALLBACK_MODEL || "";
 const pythonJobTimeoutSeconds = Number(process.env.ANKI_JOB_TIMEOUT_SECONDS || 120);
 const pythonJobRetries = Number(process.env.ANKI_JOB_RETRIES || 2);
 const pythonJobPromptName = process.env.ANKI_JOB_PROMPT_NAME || "anki_cards";
@@ -160,10 +159,6 @@ function runPythonJob(job) {
       pythonJobPromptName,
     ];
 
-    if (pythonJobFallbackModel) {
-      pythonArgs.push("--fallback-model", pythonJobFallbackModel);
-    }
-
     const command = shouldForceArm64Python ? "/usr/bin/arch" : pythonExecutable;
     const args = shouldForceArm64Python ? ["-arm64", pythonExecutable, ...pythonArgs] : pythonArgs;
 
@@ -216,6 +211,8 @@ function runPythonJob(job) {
         file_stem: job.fileStem,
         prompt_name: job.promptName,
         mode: job.mode,
+        point_count: job.pointCount,
+        user_pointers: job.userPointers,
         focuses: job.focuses,
       })
     );
@@ -249,6 +246,7 @@ async function executeJob(jobId) {
       content: result.content,
       contentType: result.content_type || "text/csv;charset=utf-8",
       fileName: result.file_name || `${job.fileStem || "anki-cards"}-anki.csv`,
+      promptText: result.prompt_text || "",
     };
   } catch (error) {
     appendJobLog(job, error instanceof Error ? error.message : "Unknown job failure");
@@ -277,7 +275,7 @@ app.post("/api/search", async (req, res) => {
 app.post("/api/llm-jobs", (req, res) => {
   cleanupJobs();
 
-  const { jobType, text = "", mode = "", focuses = [] } = req.body || {};
+  const { jobType, text = "", mode = "", pointCount = 5, userPointers = "", focuses = [] } = req.body || {};
   if (jobType !== "anki_csv") {
     res.status(400).json({ error: "Only jobType=anki_csv is currently supported" });
     return;
@@ -296,6 +294,8 @@ app.post("/api/llm-jobs", (req, res) => {
     fileStem: deriveFileStemFromText(text),
     promptName: pythonJobPromptName,
     mode: typeof mode === "string" ? mode.trim() : "",
+    pointCount: Number.isFinite(Number(pointCount)) && Number(pointCount) > 0 ? Math.max(1, Math.min(50, Math.trunc(Number(pointCount)))) : 5,
+    userPointers: typeof userPointers === "string" ? userPointers.trim() : "",
     focuses: Array.isArray(focuses) ? focuses.filter((item) => typeof item === "string" && item.trim()) : [],
     status: "queued",
     logs: ["Queued job"],

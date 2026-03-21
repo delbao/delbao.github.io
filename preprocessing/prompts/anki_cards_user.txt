@@ -4,6 +4,17 @@ Apply this learning mode while keeping the core task unchanged:
 Apply these learning-focus requirements while keeping the core task unchanged:
 {focus_requirements}
 
+Number of points to produce:
+{point_count}
+
+User priority pointers:
+{user_pointers}
+
+If the transcript supports these pointers, treat them as decisive prioritization signals when choosing which moments to turn into cards.
+If one or more pointers are clearly supported by the transcript, include those pointer-backed items first before any generic items.
+Only use non-pointer items to fill the remaining slots after the supported pointers are exhausted.
+Use the pointers to drive selection and labeling, not to invent content that is not grounded in the transcript.
+
 Use the source text below as the full context for the job.
 If the text contains a title, preserve it in the card front when useful.
 If the text contains a video URL, preserve it in the card back when useful.
