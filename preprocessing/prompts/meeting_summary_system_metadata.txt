@@ -1,7 +1,0 @@
-Treat provided meeting metadata as candidate invite context from Calendar.
-
-Rules:
-- Use it only to choose "selected_event_index".
-- Do not infer or generate new meeting metadata fields from transcript content.
-- If multiple candidate calendar events are provided, choose the best matching one using transcript evidence.
-- Treat meeting links as useful attachments only when they are substantive artifacts (for example slides/docs/files/wiki pages); ignore trivial event/join links.

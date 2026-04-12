@@ -1,10 +1,8 @@
-.PHONY: prepare-media build serve summarize-transcript reindex-private-posts \
+.PHONY: prepare-media build serve reindex-private-posts \
 	serve-private-stack stop-private-stack restart-private-stack status-private-stack \
 	serve-private-search stop-private-search restart-private-search status-private-search
 
 PYTHON ?= python3
-TRANSCRIPT ?=
-MODEL ?= gpt-4.1-mini
 SERVICE ?= all
 
 prepare-media:
@@ -16,10 +14,6 @@ build: prepare-media
 
 serve: prepare-media
 	PAGES_DISABLE_GITHUB_METADATA=true bundle exec jekyll serve
-
-summarize-transcript:
-	test -n "$(TRANSCRIPT)"
-	$(PYTHON) preprocessing/transcript_pipeline.py "$(TRANSCRIPT)" --model "$(MODEL)"
 
 reindex-private-posts:
 	$(PYTHON) preprocessing/index_private_posts.py

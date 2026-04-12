@@ -12,7 +12,8 @@ import yaml
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
-from summary.config import PRIVATE_POSTS_DIR, REPO_ROOT
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PRIVATE_POSTS_DIR = REPO_ROOT / "_private_posts"
 
 DEFAULT_INDEX_NAME = "private_posts"
 
